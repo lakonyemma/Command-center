@@ -31,7 +31,6 @@ import com.lakony.commandcenter.profile.ProfileImageStore
 fun EnhancedSettingsScreen(
     displayName: String,
     onSaveName: (String) -> Unit,
-    taskCount: Int,
     tasklyConnected: Boolean,
     tasklyUser: String,
     onOpenTaskly: () -> Unit,
@@ -163,7 +162,7 @@ fun EnhancedSettingsScreen(
             }
         }
 
-        Text("Local tasks: $taskCount  •  Version 1.2", color = MutedText, fontSize = 11.sp)
+        Text("Task management: Taskly  •  Version 1.2", color = MutedText, fontSize = 11.sp)
         Spacer(Modifier.height(20.dp))
     }
 }
