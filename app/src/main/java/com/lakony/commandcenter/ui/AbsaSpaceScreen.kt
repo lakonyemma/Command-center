@@ -1,6 +1,5 @@
 package com.lakony.commandcenter.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -9,7 +8,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,14 +51,14 @@ fun AbsaSpaceScreen(gateway: AbsaGateway = remember { MockAbsaGateway() }) {
                 Text("Banking data inside your Command Center", color = MutedText)
             }
             Surface(
-                color = Color(0xFFFFE5EB),
+                color = MaterialTheme.colorScheme.secondaryContainer,
                 shape = RoundedCornerShape(999.dp),
             ) {
                 Text(
                     "SANDBOX",
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    color = Color(0xFFB0003A),
-                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    fontWeight = FontWeight.Bold,
                     fontSize = 11.sp,
                 )
             }
@@ -71,7 +69,7 @@ fun AbsaSpaceScreen(gateway: AbsaGateway = remember { MockAbsaGateway() }) {
             error != null -> {
                 Card {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("ABSA CONNECTION", fontWeight = FontWeight.Black)
+                        Text("ABSA CONNECTION", fontWeight = FontWeight.Bold)
                         Text(error ?: "Unknown error")
                         Button(onClick = { refresh() }) { Text("TRY AGAIN") }
                     }
@@ -90,13 +88,26 @@ private fun AbsaDashboard(
 ) {
     val currency = snapshot.account.currency
 
-    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFB0003A))) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("AVAILABLE BALANCE", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text(formatMoney(snapshot.account.availableBalance, currency), color = Color.White, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
-            Text(snapshot.account.accountName, color = Color.White)
-            Text(snapshot.account.maskedAccountNumber, color = Color.White.copy(alpha = 0.8f))
-            OutlinedButton(onClick = refresh) { Text("REFRESH") }
+            Text(
+                "AVAILABLE BALANCE",
+                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.78f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                formatMoney(snapshot.account.availableBalance, currency),
+                color = MaterialTheme.colorScheme.onPrimary,
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(snapshot.account.accountName, color = MaterialTheme.colorScheme.onPrimary)
+            Text(snapshot.account.maskedAccountNumber, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.78f))
+            OutlinedButton(
+                onClick = refresh,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onPrimary),
+            ) { Text("REFRESH") }
         }
     }
 
@@ -114,13 +125,10 @@ private fun AbsaDashboard(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(transaction.description, fontWeight = FontWeight.Bold)
+                    Text(transaction.description, fontWeight = FontWeight.SemiBold)
                     Text("${transaction.date} • ${transaction.category.label}", color = MutedText, fontSize = 11.sp)
                 }
-                Text(
-                    formatSignedMoney(transaction.amount, currency),
-                    fontWeight = FontWeight.Black,
-                )
+                Text(formatSignedMoney(transaction.amount, currency), fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -134,7 +142,7 @@ private fun AbsaDashboard(
         Card {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(budget.category.label, fontWeight = FontWeight.Bold)
+                    Text(budget.category.label, fontWeight = FontWeight.SemiBold)
                     Text("${formatMoney(spent, currency)} / ${formatMoney(budget.limit, currency)}", fontSize = 11.sp)
                 }
                 LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
@@ -147,10 +155,10 @@ private fun AbsaDashboard(
         Card {
             Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) {
-                    Text(expense.title, fontWeight = FontWeight.Bold)
+                    Text(expense.title, fontWeight = FontWeight.SemiBold)
                     Text("Due ${expense.dueDate} • ${expense.category.label}", color = MutedText, fontSize = 11.sp)
                 }
-                Text(formatMoney(expense.amount, currency), fontWeight = FontWeight.Black)
+                Text(formatMoney(expense.amount, currency), fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -161,7 +169,7 @@ private fun AbsaDashboard(
             Text(
                 if (paymentsEnabled) "Approved payment API access is active."
                 else "Locked until Absa approves payment initiation API access.",
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
             )
             Button(onClick = {}, enabled = paymentsEnabled, modifier = Modifier.fillMaxWidth()) {
                 Text(if (paymentsEnabled) "MAKE PAYMENT" else "PENDING ABSA APPROVAL")
@@ -186,8 +194,8 @@ private fun AbsaDashboard(
 private fun FinanceMetric(label: String, value: String, modifier: Modifier = Modifier) {
     Card(modifier) {
         Column(Modifier.padding(14.dp)) {
-            Text(label, color = MutedText, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Text(value, fontWeight = FontWeight.Black, fontSize = 16.sp)
+            Text(label, color = MutedText, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            Text(value, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
     }
 }

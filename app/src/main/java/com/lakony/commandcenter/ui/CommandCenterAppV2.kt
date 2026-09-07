@@ -13,7 +13,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -41,7 +40,7 @@ fun CommandCenterAppV2() {
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { SwissBauhausTopBar(displayName, destination.label) },
+        topBar = { ProfessionalTopBar(displayName, destination.label) },
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                 AppDestination.entries.forEach { item ->
@@ -65,7 +64,7 @@ fun CommandCenterAppV2() {
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (destination) {
-                AppDestination.Home -> BauhausHome(
+                AppDestination.Home -> ProfessionalHome(
                     name = displayName,
                     tasklyConnected = tasklyStore.isSignedIn,
                     onTaskly = { destination = AppDestination.Taskly },
@@ -101,28 +100,49 @@ fun CommandCenterAppV2() {
 }
 
 @Composable
-private fun SwissBauhausTopBar(name: String, section: String) {
+private fun ProfessionalTopBar(name: String, section: String) {
     val context = LocalContext.current
     val profile = remember { ProfileImageStore(context) }
     val bitmap = remember(section, name) { profile.load() }
-    Surface(color = MaterialTheme.colorScheme.primary) {
+    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp, shadowElevation = 1.dp) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(Modifier.size(18.dp).background(MaterialTheme.colorScheme.secondary))
+                Box(
+                    Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                )
                 Column {
-                    Text("LAKONY / $section", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.labelLarge)
-                    Text("COMMAND CENTER", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                    Text(
+                        "LAKONY / ${section.uppercase()}",
+                        color = MutedText,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Text(
+                        "COMMAND CENTER",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                    )
                 }
             }
             if (bitmap != null) {
                 Image(bitmap, "Profile picture", Modifier.size(40.dp).clip(CircleShape), contentScale = ContentScale.Crop)
             } else {
-                Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondary), contentAlignment = Alignment.Center) {
-                    Text(name.take(1).uppercase(), fontWeight = FontWeight.Black)
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        name.take(1).uppercase(),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
             }
         }
@@ -130,7 +150,7 @@ private fun SwissBauhausTopBar(name: String, section: String) {
 }
 
 @Composable
-private fun BauhausHome(
+private fun ProfessionalHome(
     name: String,
     tasklyConnected: Boolean,
     onTaskly: () -> Unit,
@@ -142,42 +162,67 @@ private fun BauhausHome(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("HELLO, ${name.uppercase()}", style = MaterialTheme.typography.headlineLarge)
-        Text("Function first. Clear hierarchy. Strong geometry.", color = MutedText)
+        Text("Hello, $name", style = MaterialTheme.typography.headlineLarge)
+        Text("Everything important, in one place.", color = MutedText)
 
-        MetricBlock("TASKLY", if (tasklyConnected) "LIVE" else "OFF", Modifier.fillMaxWidth())
+        MetricBlock("TASKLY", if (tasklyConnected) "CONNECTED" else "OFFLINE", Modifier.fillMaxWidth())
 
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-            Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(52.dp).background(MaterialTheme.colorScheme.tertiary))
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("TASKLY SYNC", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue)
-                    Text(if (tasklyConnected) "Connected" else "Connect your account", style = MaterialTheme.typography.titleLarge)
-                    Text("Tasks, workspaces and due reminders.", color = MutedText)
-                }
-                Button(onClick = onTaskly) { Text("OPEN") }
-            }
-        }
+        FeatureCard(
+            eyebrow = "TASKLY",
+            title = if (tasklyConnected) "Tasks are connected" else "Connect your workspace",
+            subtitle = "Tasks, workspaces and due reminders.",
+            onClick = onTaskly,
+        )
 
-        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE5EB))) {
-            Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(52.dp).background(Color(0xFFB0003A)))
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("ABSA BANKING", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0003A))
-                    Text("Finance space ready", style = MaterialTheme.typography.titleLarge)
-                    Text("Balance, transactions, budgets and planned expenses.", color = MutedText)
-                }
-                Button(onClick = onAbsa) { Text("OPEN") }
-            }
-        }
+        FeatureCard(
+            eyebrow = "BANKING",
+            title = "Absa finance space",
+            subtitle = "Balance, transactions, budgets and planned expenses.",
+            onClick = onAbsa,
+        )
 
         Text("MODULES", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             ModuleBlock("MONEY", "Plans", Modifier.weight(1f), onMoney)
             ModuleBlock("ABSA", "Banking", Modifier.weight(1f), onAbsa)
             ModuleBlock("SMITH", "Commands", Modifier.weight(1f), onSmith)
+        }
+    }
+}
+
+@Composable
+private fun FeatureCard(
+    eyebrow: String,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    ElevatedCard(onClick = onClick) {
+        Row(
+            Modifier.fillMaxWidth().padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    Modifier
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(eyebrow, style = MaterialTheme.typography.labelLarge, color = PrimaryBlue)
+                Text(title, style = MaterialTheme.typography.titleLarge)
+                Text(subtitle, color = MutedText, fontSize = 12.sp)
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MutedText)
         }
     }
 }
@@ -196,8 +241,16 @@ private fun MetricBlock(label: String, value: String, modifier: Modifier) {
 private fun ModuleBlock(title: String, subtitle: String, modifier: Modifier, onClick: () -> Unit) {
     ElevatedCard(onClick = onClick, modifier = modifier) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.size(24.dp).background(MaterialTheme.colorScheme.secondary))
-            Text(title, fontWeight = FontWeight.Black)
+            Box(
+                Modifier
+                    .size(24.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+            }
+            Text(title, fontWeight = FontWeight.Bold)
             Text(subtitle, color = MutedText, fontSize = 11.sp)
         }
     }
