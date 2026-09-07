@@ -2,54 +2,60 @@
 
 A custom Android command center built with Kotlin and Jetpack Compose.
 
-## Current features
+## Core experience
 
-- Lakony Blue interface
-- Home dashboard
-- Developer, School, Money, and Smith modes
-- Bottom navigation
-- Saved task list
-- Task categories
-- Complete and clear tasks
-- Saved display name
-- Offline Smith command engine
-- Quick command routing
-- `add task ...` Smith command
-- Simple money snapshot
-- Custom blue launcher icon
-- Unit tests for Smith commands
-- GitHub Actions Android build
-- Automatic debug APK artifact
+- Lakony Blue interface with Bauhaus and Swiss-inspired layout
+- Unified dashboard and Control Center
+- Local tasks and Taskly integration
+- Smith command interface
+- Money planning and Absa banking space
+- Profile picture and theme settings
+- Sound and vibration task notifications
+- Offline-first local storage
+- GitHub Actions Android build with downloadable debug APK
 
-## Smith commands
+## Control Center modules
 
-Try commands such as:
+- Calendar: schedule, reminders, Google Calendar connection surface and Taskly due-date sync
+- Inbox: Gmail connection surface, priority inbox and mail alerts
+- Developer: GitHub projects, cloud deployments, databases and security status
+- Trading: MT5/EA control surface, risk guard, news guard, journal and market alerts
+- Devices: Android, IoT and remote automation surfaces
+- Systems: Render, PostgreSQL, automations and finance connections
 
-- `Smith, dev mode`
-- `Smith, school mode`
-- `Smith, money mode`
-- `Smith, brief me`
-- `add task Finish database`
-- `settings`
+## Finance
+
+The Absa space currently provides the application layer for:
+
+- Account balance
+- Recent transactions
+- Spending categories
+- Budgets
+- Planned expenses
+- Projected balance
+
+Real Absa customer data requires approved Absa API access, OAuth/customer consent and production credentials. Payment initiation remains disabled until the bank grants the required permissions.
+
+## Secure integration model
+
+The public repository must never contain personal API keys, banking credentials, access tokens or production secrets. External services should connect through OAuth, encrypted local session storage, Android secure storage, or a backend secret store.
 
 ## Run in Android Studio
 
 1. Clone `https://github.com/lakonyemma/Command-center.git`.
 2. Open the repository folder in Android Studio.
 3. Use JDK 17.
-4. Allow Gradle sync to complete.
+4. Allow Gradle sync to finish.
 5. Connect an Android phone with USB debugging enabled, or start an emulator.
 6. Press Run.
 
-## Download APK from GitHub
+## APK from GitHub
 
 1. Open the repository on GitHub.
-2. Open the Actions tab.
+2. Open Actions.
 3. Select the latest successful Android CI run.
 4. Under Artifacts, download `lakony-command-center-debug`.
-5. Extract the ZIP and install `app-debug.apk` on your Android phone.
-
-Android might ask you to allow installation from your browser or file manager for a debug APK.
+5. Extract the ZIP and install `app-debug.apk`.
 
 ## Technical details
 
@@ -63,4 +69,4 @@ Android might ask you to allow installation from your browser or file manager fo
 
 ## Integration roadmap
 
-The app is structured for later authenticated integrations such as GitHub, calendar, email, and an online AI backend. API keys and account credentials should never be committed to this public repository.
+Next production connections are Gmail, Google Calendar, GitHub account data, Render service data, online Smith AI, MT5 bridge data and approved Absa APIs. Each integration stays isolated behind its own service layer so the Android UI remains stable when providers or credentials change.
