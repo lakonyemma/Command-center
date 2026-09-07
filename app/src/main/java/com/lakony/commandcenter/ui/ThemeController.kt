@@ -11,12 +11,13 @@ object ThemeController {
         private set
 
     fun initialize(context: Context) {
-        style = runCatching { AppThemeStyle.valueOf(AppSettingsStore(context).themeStyle) }
-            .getOrDefault(AppThemeStyle.BAUHAUS_BLUE)
+        style = AppThemeStyle.BAUHAUS_BLUE
+        AppSettingsStore(context).themeStyle = AppThemeStyle.BAUHAUS_BLUE.name
     }
 
     fun set(context: Context, newStyle: AppThemeStyle) {
-        style = newStyle
-        AppSettingsStore(context).themeStyle = newStyle.name
+        // The app now uses one cohesive Navy Blue design system throughout.
+        style = AppThemeStyle.BAUHAUS_BLUE
+        AppSettingsStore(context).themeStyle = AppThemeStyle.BAUHAUS_BLUE.name
     }
 }
