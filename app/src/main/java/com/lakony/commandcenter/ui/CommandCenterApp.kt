@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
@@ -28,10 +29,14 @@ import androidx.compose.ui.unit.sp
 import com.lakony.commandcenter.data.LocalStore
 import com.lakony.commandcenter.logic.SmithCommandEngine
 import com.lakony.commandcenter.model.AppTask
+import com.lakony.commandcenter.taskly.TasklyApi
+import com.lakony.commandcenter.taskly.TasklySessionStore
+import kotlinx.coroutines.launch
 
 enum class Destination(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Default.Home),
-    Tasks("Tasks", Icons.Default.TaskAlt),
+    Tasks("Local", Icons.Default.TaskAlt),
+    Taskly("Taskly", Icons.Default.CloudSync),
     Smith("Smith", Icons.Default.SmartToy),
     Money("Money", Icons.Default.AccountBalanceWallet),
     Settings("Settings", Icons.Default.Settings)
@@ -41,6 +46,8 @@ enum class Destination(val label: String, val icon: ImageVector) {
 fun CommandCenterApp() {
     val context = LocalContext.current
     val store = remember { LocalStore(context) }
+    val tasklyStore = remember { TasklySessionStore(context) }
+    val tasklyApi = remember { TasklyApi(tasklyStore) }
     var destination by remember { mutableStateOf(Destination.Home) }
     var displayName by remember { mutableStateOf(store.loadName()) }
     var tasks by remember { mutableStateOf(store.loadTasks()) }
@@ -60,7 +67,7 @@ fun CommandCenterApp() {
                         selected = destination == item,
                         onClick = { destination = item },
                         icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label, fontSize = 10.sp) }
+                        label = { Text(item.label, fontSize = 9.sp) }
                     )
                 }
             }
@@ -68,20 +75,19 @@ fun CommandCenterApp() {
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (destination) {
-                Destination.Home -> HomeScreen(displayName, tasks) { destination = it }
+                Destination.Home -> HomeScreen(displayName, tasks, tasklyStore.isSignedIn) { destination = it }
                 Destination.Tasks -> TasksScreen(
                     tasks = tasks,
-                    onAdd = { title, category ->
-                        saveTasks(tasks + AppTask(title = title, category = category))
-                    },
-                    onToggle = { id ->
-                        saveTasks(tasks.map { if (it.id == id) it.copy(completed = !it.completed) else it })
-                    },
+                    onAdd = { title, category -> saveTasks(tasks + AppTask(title = title, category = category)) },
+                    onToggle = { id -> saveTasks(tasks.map { if (it.id == id) it.copy(completed = !it.completed) else it }) },
                     onDeleteCompleted = { saveTasks(tasks.filterNot { it.completed }) }
                 )
+                Destination.Taskly -> TasklyHubScreen(tasklyStore, tasklyApi)
                 Destination.Smith -> SmithScreen(
-                    onNavigate = { label -> Destination.entries.firstOrNull { it.label == label }?.let { destination = it } },
-                    onAddTask = { title -> saveTasks(tasks + AppTask(title = title, category = "Smith")) }
+                    tasklyStore = tasklyStore,
+                    tasklyApi = tasklyApi,
+                    onNavigate = { label -> Destination.entries.firstOrNull { it.label.equals(label, true) }?.let { destination = it } },
+                    onAddLocalTask = { title -> saveTasks(tasks + AppTask(title = title, category = "Smith")) },
                 )
                 Destination.Money -> MoneyScreen()
                 Destination.Settings -> SettingsScreen(
@@ -90,7 +96,10 @@ fun CommandCenterApp() {
                         displayName = it
                         store.saveName(it)
                     },
-                    taskCount = tasks.size
+                    taskCount = tasks.size,
+                    tasklyConnected = tasklyStore.isSignedIn,
+                    tasklyUser = tasklyStore.userName,
+                    onOpenTaskly = { destination = Destination.Taskly },
                 )
             }
         }
@@ -117,7 +126,7 @@ private fun AppTopBar(name: String, section: String) {
 }
 
 @Composable
-private fun HomeScreen(name: String, tasks: List<AppTask>, onNavigate: (Destination) -> Unit) {
+private fun HomeScreen(name: String, tasks: List<AppTask>, tasklyConnected: Boolean, onNavigate: (Destination) -> Unit) {
     val open = tasks.count { !it.completed }
     val done = tasks.count { it.completed }
     Column(
@@ -128,8 +137,17 @@ private fun HomeScreen(name: String, tasks: List<AppTask>, onNavigate: (Destinat
         Text("Your personal control panel is ready.", color = MutedText)
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatCard("Open tasks", open.toString(), Modifier.weight(1f))
-            StatCard("Completed", done.toString(), Modifier.weight(1f))
+            StatCard("Local open", open.toString(), Modifier.weight(1f))
+            StatCard("Local done", done.toString(), Modifier.weight(1f))
+        }
+
+        Card(colors = CardDefaults.cardColors(containerColor = if (tasklyConnected) SoftBlue else Color.White), shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("TASKLY LINK", color = PrimaryBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(if (tasklyConnected) "Taskly is connected" else "Connect Taskly", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = DeepBlue)
+                Text(if (tasklyConnected) "Open synced workspaces and tasks from Command Center." else "Sign in once, then manage Taskly without leaving this app.", color = MutedText)
+                Button(onClick = { onNavigate(Destination.Taskly) }) { Text(if (tasklyConnected) "Open Taskly" else "Connect now") }
+            }
         }
 
         Text("Modes", fontWeight = FontWeight.Bold, color = DeepBlue)
@@ -140,15 +158,6 @@ private fun HomeScreen(name: String, tasks: List<AppTask>, onNavigate: (Destinat
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             ModeCard("Money", Icons.Default.AccountBalanceWallet, "Budget overview", Modifier.weight(1f)) { onNavigate(Destination.Money) }
             ModeCard("Smith", Icons.Default.SmartToy, "Run commands", Modifier.weight(1f)) { onNavigate(Destination.Smith) }
-        }
-
-        Card(colors = CardDefaults.cardColors(containerColor = SoftBlue), shape = RoundedCornerShape(20.dp)) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text("TODAY", color = PrimaryBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Text(if (open == 0) "You have no open tasks." else "$open task${if (open == 1) "" else "s"} waiting for you.", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("Use Smith to switch modes or add a task quickly.", color = MutedText)
-                Button(onClick = { onNavigate(Destination.Smith) }) { Text("Open Smith") }
-            }
         }
     }
 }
@@ -189,86 +198,73 @@ private fun TasksScreen(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Tasks", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = DeepBlue)
+        Text("Local tasks", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = DeepBlue)
+        Text("These stay on this phone. Use the Taskly tab for cloud-synced tasks.", color = MutedText)
         Card(shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Task") },
-                    singleLine = true
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    categories.forEach { item ->
-                        FilterChip(selected = category == item, onClick = { category = item }, label = { Text(item, fontSize = 11.sp) })
-                    }
+                OutlinedTextField(value = title, onValueChange = { title = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Task") }, singleLine = true)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    categories.forEach { item -> FilterChip(selected = category == item, onClick = { category = item }, label = { Text(item, fontSize = 11.sp) }) }
                 }
                 Button(
-                    onClick = {
-                        if (title.isNotBlank()) {
-                            onAdd(title.trim(), category)
-                            title = ""
-                        }
-                    },
+                    onClick = { if (title.isNotBlank()) { onAdd(title.trim(), category); title = "" } },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Add task")
+                    Text("Add local task")
                 }
             }
         }
 
-        if (tasks.isEmpty()) {
-            Text("No tasks yet. Add your first one above.", color = MutedText)
-        } else {
-            tasks.forEach { task ->
-                Card(shape = RoundedCornerShape(16.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = { onToggle(task.id) }) {
-                            Icon(
-                                if (task.completed) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                                contentDescription = if (task.completed) "Mark open" else "Mark complete",
-                                tint = if (task.completed) PrimaryBlue else MutedText
-                            )
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Text(task.title, fontWeight = FontWeight.SemiBold, color = DeepBlue)
-                            Text(task.category, fontSize = 11.sp, color = MutedText)
-                        }
+        if (tasks.isEmpty()) Text("No local tasks yet.", color = MutedText)
+        tasks.forEach { task ->
+            Card(shape = RoundedCornerShape(16.dp)) {
+                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { onToggle(task.id) }) {
+                        Icon(
+                            if (task.completed) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                            contentDescription = if (task.completed) "Mark open" else "Mark complete",
+                            tint = if (task.completed) PrimaryBlue else MutedText
+                        )
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(task.title, fontWeight = FontWeight.SemiBold, color = DeepBlue)
+                        Text(task.category, fontSize = 11.sp, color = MutedText)
                     }
                 }
             }
-            if (tasks.any { it.completed }) {
-                TextButton(onClick = onDeleteCompleted, modifier = Modifier.align(Alignment.End)) {
-                    Text("Clear completed")
-                }
-            }
+        }
+        if (tasks.any { it.completed }) {
+            TextButton(onClick = onDeleteCompleted, modifier = Modifier.align(Alignment.End)) { Text("Clear completed") }
         }
         Spacer(Modifier.height(12.dp))
     }
 }
 
 @Composable
-private fun SmithScreen(onNavigate: (String) -> Unit, onAddTask: (String) -> Unit) {
+private fun SmithScreen(
+    tasklyStore: TasklySessionStore,
+    tasklyApi: TasklyApi,
+    onNavigate: (String) -> Unit,
+    onAddLocalTask: (String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
     var command by remember { mutableStateOf("") }
     var response by remember { mutableStateOf("Ready for your command.") }
+    var busy by remember { mutableStateOf(false) }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text("Smith", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = DeepBlue)
-        Text("Your offline command layer. More integrations will plug into this screen.", color = MutedText)
+        Text(if (tasklyStore.isSignedIn) "Taskly commands are active." else "Connect Taskly to control cloud tasks with Smith.", color = MutedText)
 
         Card(colors = CardDefaults.cardColors(containerColor = SoftBlue), shape = RoundedCornerShape(20.dp)) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Try a command", fontWeight = FontWeight.Bold)
-                Text("dev mode • school mode • money mode • brief me • add task Finish database", fontSize = 12.sp, color = MutedText)
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Try", fontWeight = FontWeight.Bold)
+                Text("show my tasks • add task Finish database • sync tasks • dev mode • money mode", fontSize = 12.sp, color = MutedText)
             }
         }
 
@@ -277,18 +273,46 @@ private fun SmithScreen(onNavigate: (String) -> Unit, onAddTask: (String) -> Uni
             onValueChange = { command = it },
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Smith command") },
-            placeholder = { Text("Smith, brief me") },
+            placeholder = { Text("Smith, show my tasks") },
             minLines = 2
         )
         Button(
             onClick = {
-                val result = SmithCommandEngine.run(command)
-                response = result.message
-                result.taskToAdd?.let(onAddTask)
-                result.destination?.let(onNavigate)
+                val raw = command.trim()
+                val normalized = raw.lowercase().removePrefix("smith,").trim()
+                when {
+                    normalized == "show my tasks" || normalized == "sync tasks" || normalized == "open taskly" -> {
+                        onNavigate("Taskly")
+                        response = "Opening your synced Taskly tasks."
+                    }
+                    normalized.startsWith("add task ") -> {
+                        val title = raw.substringAfter("add task ", "", ignoreCase = true).trim()
+                        if (title.isBlank()) {
+                            response = "Give the task a title."
+                        } else if (tasklyStore.isSignedIn && !tasklyStore.selectedWorkspaceId.isNullOrBlank()) {
+                            busy = true
+                            scope.launch {
+                                tasklyApi.createTask(tasklyStore.selectedWorkspaceId!!, title)
+                                    .onSuccess { response = "Added ‘${it.title}’ to Taskly." }
+                                    .onFailure { response = it.message ?: "Taskly could not add the task." }
+                                busy = false
+                            }
+                        } else {
+                            onAddLocalTask(title)
+                            response = "Taskly is not connected, so I saved it locally."
+                        }
+                    }
+                    else -> {
+                        val result = SmithCommandEngine.run(raw)
+                        response = result.message
+                        result.taskToAdd?.let(onAddLocalTask)
+                        result.destination?.let(onNavigate)
+                    }
+                }
             },
+            enabled = !busy,
             modifier = Modifier.fillMaxWidth().height(52.dp)
-        ) { Text("Run command") }
+        ) { Text(if (busy) "Working…" else "Run command") }
 
         Card(shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(16.dp)) {
@@ -311,7 +335,7 @@ private fun MoneyScreen() {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("Money", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = DeepBlue)
-        Text("A simple private snapshot. Values stay on this screen only in this version.", color = MutedText)
+        Text("A simple private snapshot.", color = MutedText)
         OutlinedTextField(value = savings, onValueChange = { savings = it.filter { ch -> ch.isDigit() || ch == '.' } }, modifier = Modifier.fillMaxWidth(), label = { Text("Savings / income") }, singleLine = true)
         OutlinedTextField(value = spending, onValueChange = { spending = it.filter { ch -> ch.isDigit() || ch == '.' } }, modifier = Modifier.fillMaxWidth(), label = { Text("Planned spending") }, singleLine = true)
         Card(colors = CardDefaults.cardColors(containerColor = SoftBlue), shape = RoundedCornerShape(20.dp)) {
@@ -324,7 +348,14 @@ private fun MoneyScreen() {
 }
 
 @Composable
-private fun SettingsScreen(displayName: String, onSaveName: (String) -> Unit, taskCount: Int) {
+private fun SettingsScreen(
+    displayName: String,
+    onSaveName: (String) -> Unit,
+    taskCount: Int,
+    tasklyConnected: Boolean,
+    tasklyUser: String,
+    onOpenTaskly: () -> Unit,
+) {
     var name by remember(displayName) { mutableStateOf(displayName) }
     var saved by remember { mutableStateOf(false) }
 
@@ -345,10 +376,15 @@ private fun SettingsScreen(displayName: String, onSaveName: (String) -> Unit, ta
         if (saved) Text("Profile saved on this phone.", color = PrimaryBlue)
 
         HorizontalDivider()
+        Text("Taskly", fontWeight = FontWeight.Bold, color = DeepBlue)
+        Text(if (tasklyConnected) "Connected as ${tasklyUser.ifBlank { "Taskly user" }}" else "Not connected", color = MutedText)
+        OutlinedButton(onClick = onOpenTaskly) { Text(if (tasklyConnected) "Manage Taskly connection" else "Connect Taskly") }
+
+        HorizontalDivider()
         Text("App status", fontWeight = FontWeight.Bold, color = DeepBlue)
         Text("Local tasks: $taskCount", color = MutedText)
         Text("Theme: Lakony Blue", color = MutedText)
-        Text("AI: Offline command engine", color = MutedText)
-        Text("Version: 1.0", color = MutedText)
+        Text("Smith: local commands + Taskly task commands", color = MutedText)
+        Text("Version: 1.1", color = MutedText)
     }
 }
