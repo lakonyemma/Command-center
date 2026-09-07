@@ -5,6 +5,10 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 class TasklySessionStore(context: Context) {
+    companion object {
+        const val DEFAULT_BASE_URL = "https://taskly-api-wws3.onrender.com"
+    }
+
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
@@ -18,8 +22,8 @@ class TasklySessionStore(context: Context) {
     )
 
     var baseUrl: String
-        get() = prefs.getString("base_url", "") ?: ""
-        set(value) = prefs.edit().putString("base_url", value.trim().trimEnd('/')).apply()
+        get() = prefs.getString("base_url", DEFAULT_BASE_URL)?.ifBlank { DEFAULT_BASE_URL } ?: DEFAULT_BASE_URL
+        set(value) = prefs.edit().putString("base_url", value.trim().trimEnd('/').ifBlank { DEFAULT_BASE_URL }).apply()
 
     var accessToken: String?
         get() = prefs.getString("access_token", null)
