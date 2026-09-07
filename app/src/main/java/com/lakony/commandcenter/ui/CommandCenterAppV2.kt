@@ -23,6 +23,7 @@ import com.lakony.commandcenter.logic.SmithCommandEngine
 import com.lakony.commandcenter.profile.ProfileImageStore
 import com.lakony.commandcenter.taskly.TasklyApi
 import com.lakony.commandcenter.taskly.TasklySessionStore
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 private enum class AppDestination(val label: String) {
@@ -74,7 +75,7 @@ fun CommandCenterAppV2() {
                 )
                 AppDestination.Taskly -> TasklyHubScreen(tasklyStore, tasklyApi)
                 AppDestination.Smith -> SmithV2(tasklyStore, tasklyApi) { target ->
-                    destination = when (target.lowercase()) {
+                    destination = when (target.lowercase(Locale.ROOT)) {
                         "taskly", "tasks" -> AppDestination.Taskly
                         "money" -> AppDestination.Money
                         "absa", "bank", "banking" -> AppDestination.Absa
@@ -119,7 +120,7 @@ private fun ProfessionalTopBar(name: String, section: String) {
                 )
                 Column {
                     Text(
-                        "LAKONY / ${section.uppercase()}",
+                        "LAKONY / ${section.uppercase(Locale.ROOT)}",
                         color = MutedText,
                         style = MaterialTheme.typography.labelLarge,
                     )
@@ -139,7 +140,7 @@ private fun ProfessionalTopBar(name: String, section: String) {
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        name.take(1).uppercase(),
+                        name.take(1).uppercase(Locale.ROOT),
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontWeight = FontWeight.Bold,
                     )
@@ -300,7 +301,7 @@ private fun SmithV2(
             modifier = Modifier.fillMaxWidth(),
             onClick = {
                 val raw = command.trim()
-                val normalized = raw.lowercase().removePrefix("smith,").trim()
+                val normalized = raw.lowercase(Locale.ROOT).removePrefix("smith,").trim()
                 when {
                     normalized == "show my tasks" || normalized == "sync tasks" -> navigate("taskly")
                     normalized == "open absa" || normalized == "show my bank" || normalized == "show my balance" -> navigate("absa")

@@ -14,6 +14,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+// Keep these legacy enum identifiers stable: ThemeController persists AppThemeStyle.name.
+// The user-facing labels were modernized, but renaming the enum constants would break
+// existing saved theme preferences unless a migration is added first.
 enum class AppThemeStyle(val label: String) {
     BAUHAUS_BLUE("Executive Navy"),
     SWISS_RED("Midnight Blue"),
