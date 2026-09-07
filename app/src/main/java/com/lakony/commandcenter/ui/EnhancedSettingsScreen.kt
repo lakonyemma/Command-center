@@ -54,7 +54,7 @@ fun EnhancedSettingsScreen(
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Text("SETTINGS", style = MaterialTheme.typography.headlineMedium)
-        Text("Swiss grid. Bauhaus geometry. Your colors.", color = MutedText)
+        Text("Professional themes and preferences for your Command Center.", color = MutedText)
 
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -72,7 +72,7 @@ fun EnhancedSettingsScreen(
                             Modifier.size(76.dp).clip(CircleShape).background(SoftBlue),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text(name.take(1).uppercase(), fontSize = 28.sp, fontWeight = FontWeight.Black, color = PrimaryBlue)
+                            Text(name.take(1).uppercase(), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
                         }
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -118,7 +118,7 @@ fun EnhancedSettingsScreen(
                 Text("TASKLY REMINDERS", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Due-time sound + vibration", fontWeight = FontWeight.Bold)
+                        Text("Due-time sound + vibration", fontWeight = FontWeight.SemiBold)
                         Text("Alerts when a synced Taskly task reaches its due time.", color = MutedText, fontSize = 12.sp)
                     }
                     Switch(
