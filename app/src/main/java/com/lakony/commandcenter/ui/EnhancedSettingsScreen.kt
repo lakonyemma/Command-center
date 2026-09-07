@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.lakony.commandcenter.data.AppSettingsStore
 import com.lakony.commandcenter.notifications.TaskNotificationScheduler
 import com.lakony.commandcenter.profile.ProfileImageStore
+import java.util.Locale
 
 @Composable
 fun EnhancedSettingsScreen(
@@ -54,7 +55,7 @@ fun EnhancedSettingsScreen(
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Text("SETTINGS", style = MaterialTheme.typography.headlineMedium)
-        Text("Professional themes and preferences for your Command Center.", color = MutedText)
+        Text("Midnight Blue design and Command Center preferences.", color = MutedText)
 
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -72,7 +73,7 @@ fun EnhancedSettingsScreen(
                             Modifier.size(76.dp).clip(CircleShape).background(SoftBlue),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text(name.take(1).uppercase(), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
+                            Text(name.take(1).uppercase(Locale.ROOT), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
                         }
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -100,16 +101,11 @@ fun EnhancedSettingsScreen(
             }
         }
 
-        Card {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("COLOR THEME", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue)
-                AppThemeStyle.entries.forEach { style ->
-                    FilterChip(
-                        selected = ThemeController.style == style,
-                        onClick = { ThemeController.set(context, style) },
-                        label = { Text(style.label) },
-                    )
-                }
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("APP THEME", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue)
+                Text("Midnight Blue", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("A single dark navy design is used throughout the Command Center. Absa keeps its banking red identity inside the Absa space.", color = MutedText, fontSize = 12.sp)
             }
         }
 
@@ -162,7 +158,7 @@ fun EnhancedSettingsScreen(
             }
         }
 
-        Text("Task management: Taskly  •  Version 1.2", color = MutedText, fontSize = 11.sp)
+        Text("Task management: Taskly  •  Command Center", color = MutedText, fontSize = 11.sp)
         Spacer(Modifier.height(20.dp))
     }
 }
