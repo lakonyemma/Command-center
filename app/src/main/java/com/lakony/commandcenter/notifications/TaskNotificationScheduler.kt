@@ -16,6 +16,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.lakony.commandcenter.MainActivity
+import com.lakony.commandcenter.R
+import com.lakony.commandcenter.data.AppSettingsStore
 import com.lakony.commandcenter.taskly.TasklyTask
 import org.json.JSONArray
 import org.json.JSONObject
@@ -32,14 +34,8 @@ object TaskNotificationScheduler {
         val manager = context.getSystemService(NotificationManager::class.java)
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
         val sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        val audio = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
-            .build()
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Taskly due tasks",
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
+        val audio = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT).build()
+        val channel = NotificationChannel(CHANNEL_ID, "Taskly due tasks", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Sound and vibration reminders when a Taskly task reaches its due time"
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 350, 180, 350, 180, 500)
@@ -50,12 +46,18 @@ object TaskNotificationScheduler {
 
     fun scheduleAll(context: Context, tasks: List<TasklyTask>) {
         createChannel(context)
+        if (!AppSettingsStore(context).tasklyDueNotifications) {
+            cancelAll(context)
+            return
+        }
         val active = tasks.filter { !it.completed && !it.dueDate.isNullOrBlank() }
+        cancelStale(context, active.map { it.id }.toSet())
         saveCache(context, active)
         active.forEach { schedule(context, it) }
     }
 
     fun rescheduleCached(context: Context) {
+        if (!AppSettingsStore(context).tasklyDueNotifications) return
         scheduleAll(context, loadCache(context))
     }
 
@@ -66,9 +68,22 @@ object TaskNotificationScheduler {
         saveCache(context, remaining)
     }
 
+    fun cancelAll(context: Context) {
+        val alarmManager = context.getSystemService(AlarmManager::class.java)
+        loadCache(context).forEach { alarmManager.cancel(pendingIntent(context, it.id, "", 0L)) }
+        saveCache(context, emptyList())
+    }
+
     fun canScheduleExact(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
         return context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+    }
+
+    private fun cancelStale(context: Context, activeIds: Set<String>) {
+        val alarmManager = context.getSystemService(AlarmManager::class.java)
+        loadCache(context).filterNot { it.id in activeIds }.forEach {
+            alarmManager.cancel(pendingIntent(context, it.id, "", 0L))
+        }
     }
 
     private fun schedule(context: Context, task: TasklyTask) {
@@ -142,6 +157,7 @@ object TaskNotificationScheduler {
 
 class TaskDueReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (!AppSettingsStore(context).tasklyDueNotifications) return
         TaskNotificationScheduler.createChannel(context)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -158,7 +174,7 @@ class TaskDueReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val notification = NotificationCompat.Builder(context, TaskNotificationScheduler.CHANNEL_ID)
-            .setSmallIcon(com.lakony.commandcenter.R.drawable.command_center_icon)
+            .setSmallIcon(R.drawable.command_center_icon)
             .setContentTitle("Task due now")
             .setContentText(title)
             .setStyle(NotificationCompat.BigTextStyle().bigText("Taskly reminder: $title is due now."))
