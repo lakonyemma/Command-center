@@ -1,5 +1,6 @@
 package com.lakony.commandcenter.ui
 
+import android.accounts.Account
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -18,6 +19,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,29 +52,27 @@ fun GmailInboxScreen() {
     val client = remember { Identity.getAuthorizationClient(activity) }
     val messages = remember { mutableStateListOf<GmailMessage>() }
     var connectedEmail by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("Connect Gmail to load your inbox.") }
+    var status by remember { mutableStateOf("Connect your Google account to load Gmail.") }
     var busy by remember { mutableStateOf(false) }
 
     val loadInbox: (String) -> Unit = { token ->
         busy = true
-        status = "Loading inbox..."
+        status = "Loading Gmail..."
         scope.launch {
             runCatching { GmailClient.loadInbox(token) }
                 .onSuccess { inbox ->
                     if (!inbox.email.equals(EXPECTED_GMAIL_ACCOUNT, ignoreCase = true)) {
                         connectedEmail = inbox.email
                         messages.clear()
-                        status = "Select $EXPECTED_GMAIL_ACCOUNT to use this inbox."
+                        status = "Wrong Google account. Use $EXPECTED_GMAIL_ACCOUNT."
                     } else {
                         connectedEmail = inbox.email
                         messages.clear()
                         messages.addAll(inbox.messages)
-                        status = "Connected"
+                        status = "Google account connected"
                     }
                 }
-                .onFailure { error ->
-                    status = error.message ?: "Gmail could not be loaded."
-                }
+                .onFailure { error -> status = error.message ?: "Gmail could not be loaded." }
             busy = false
         }
     }
@@ -84,24 +84,37 @@ fun GmailInboxScreen() {
             runCatching { client.getAuthorizationResultFromIntent(result.data!!) }
                 .onSuccess { authorization ->
                     val token = authorization.accessToken
-                    if (token.isNullOrBlank()) status = "Google did not return an access token."
-                    else loadInbox(token)
+                    if (token.isNullOrBlank()) {
+                        status = "Google did not return an access token."
+                        busy = false
+                    } else {
+                        loadInbox(token)
+                    }
                 }
-                .onFailure { error -> status = error.message ?: "Gmail authorization failed." }
+                .onFailure { error ->
+                    status = error.message ?: "Google authorization failed."
+                    busy = false
+                }
         } else {
-            status = "Gmail connection cancelled."
+            status = "Google connection cancelled."
+            busy = false
         }
     }
 
-    fun connect() {
+    fun authorize(selectAccount: Boolean) {
         busy = true
-        status = "Opening Google authorization..."
-        val request = AuthorizationRequest.builder()
-            .setRequestedScopes(listOf(Scope(GMAIL_SCOPE)))
-            .setPrompt(AuthorizationRequest.Prompt.SELECT_ACCOUNT)
-            .build()
+        status = if (selectAccount) "Choose your Google account..." else "Connecting $EXPECTED_GMAIL_ACCOUNT..."
 
-        client.authorize(request)
+        val builder = AuthorizationRequest.builder()
+            .setRequestedScopes(listOf(Scope(GMAIL_SCOPE)))
+
+        if (selectAccount) {
+            builder.setPrompt(AuthorizationRequest.Prompt.SELECT_ACCOUNT)
+        } else {
+            builder.setAccount(Account(EXPECTED_GMAIL_ACCOUNT, "com.google"))
+        }
+
+        client.authorize(builder.build())
             .addOnSuccessListener { authorization ->
                 if (authorization.hasResolution()) {
                     val pendingIntent = authorization.pendingIntent
@@ -122,7 +135,11 @@ fun GmailInboxScreen() {
                 }
             }
             .addOnFailureListener { error ->
-                status = error.message ?: "Gmail authorization failed."
+                status = if (selectAccount) {
+                    error.message ?: "Google authorization failed."
+                } else {
+                    "Could not use $EXPECTED_GMAIL_ACCOUNT automatically. Tap CHOOSE ACCOUNT below."
+                }
                 busy = false
             }
     }
@@ -134,18 +151,21 @@ fun GmailInboxScreen() {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Icons.Default.Email, contentDescription = null, tint = PrimaryBlue)
             Column {
-                Text("GMAIL", style = MaterialTheme.typography.headlineMedium)
+                Text("GOOGLE / GMAIL", style = MaterialTheme.typography.headlineMedium)
                 Text(EXPECTED_GMAIL_ACCOUNT, color = MutedText)
             }
         }
 
         Card {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("ACCOUNT", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue)
+                Text("GOOGLE ACCOUNT", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue)
                 Text(if (connectedEmail.isBlank()) "Not connected" else connectedEmail, fontWeight = FontWeight.Bold)
                 Text(status, color = MutedText, fontSize = 12.sp)
-                Button(onClick = { connect() }, enabled = !busy) {
-                    Text(if (connectedEmail.isBlank()) "CONNECT GMAIL" else "REFRESH / SWITCH ACCOUNT")
+                Button(onClick = { authorize(false) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (connectedEmail.isBlank()) "CONNECT GOOGLE ACCOUNT" else "REFRESH GMAIL")
+                }
+                OutlinedButton(onClick = { authorize(true) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Text("CHOOSE ACCOUNT")
                 }
             }
         }
