@@ -12,6 +12,17 @@ class LocalStore(context: Context) {
         prefs.edit().putString("display_name", name.trim().ifBlank { "Lakony" }).apply()
     }
 
+    fun loadMoneyIncome(): String = prefs.getString("money_income", "") ?: ""
+
+    fun loadMoneySpending(): String = prefs.getString("money_spending", "") ?: ""
+
+    fun saveMoney(income: String, spending: String) {
+        prefs.edit()
+            .putString("money_income", income)
+            .putString("money_spending", spending)
+            .apply()
+    }
+
     fun loadTasks(): List<AppTask> {
         val raw = prefs.getStringSet("tasks", emptySet()).orEmpty()
         return raw.mapNotNull { entry ->
