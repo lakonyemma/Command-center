@@ -1,5 +1,6 @@
 package com.lakony.commandcenter.taskly
 
+import com.lakony.commandcenter.notifications.TaskNotificationScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -67,13 +68,17 @@ class TasklyApi(private val store: TasklySessionStore) {
     suspend fun listTasks(workspaceId: String): Result<List<TasklyTask>> = withContext(Dispatchers.IO) {
         runCatching {
             val json = authenticatedJson("GET", "/api/tasks?workspaceId=${encode(workspaceId)}")
-            val array = json.optJSONArray("tasks") ?: return@runCatching emptyList()
-            buildList {
+            val array = json.optJSONArray("tasks") ?: return@runCatching emptyList<TasklyTask>().also {
+                TaskNotificationScheduler.scheduleAll(store.appContext, it)
+            }
+            val tasks = buildList {
                 for (i in 0 until array.length()) {
                     val item = array.optJSONObject(i) ?: continue
                     parseTask(item)?.let(::add)
                 }
             }
+            TaskNotificationScheduler.scheduleAll(store.appContext, tasks)
+            tasks
         }
     }
 
@@ -97,13 +102,16 @@ class TasklyApi(private val store: TasklySessionStore) {
                 "/api/tasks/${encode(taskId)}",
                 JSONObject().put("status", if (completed) "COMPLETED" else "TODO"),
             )
-            parseTask(json.getJSONObject("task")) ?: error("Taskly returned an invalid task")
+            val task = parseTask(json.getJSONObject("task")) ?: error("Taskly returned an invalid task")
+            if (completed) TaskNotificationScheduler.cancel(store.appContext, taskId)
+            task
         }
     }
 
     suspend fun deleteTask(taskId: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             authenticatedJson("DELETE", "/api/tasks/${encode(taskId)}")
+            TaskNotificationScheduler.cancel(store.appContext, taskId)
             Unit
         }
     }
@@ -119,6 +127,7 @@ class TasklyApi(private val store: TasklySessionStore) {
                     null,
                 )
             }
+            TaskNotificationScheduler.cancelAll(store.appContext)
             store.clearSession()
         }
     }
@@ -156,6 +165,7 @@ class TasklyApi(private val store: TasklySessionStore) {
             null,
         )
         if (response.code !in 200..299) {
+            TaskNotificationScheduler.cancelAll(store.appContext)
             store.clearSession()
             return false
         }
