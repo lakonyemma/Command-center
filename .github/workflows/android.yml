@@ -29,6 +29,33 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Restore stable debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: command-center-debug-keystore-v1
+
+      - name: Ensure stable debug signing key
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -dname "CN=Android Debug,O=Lakony Command Center,C=UG" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000
+          fi
+          keytool -list -v \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android \
+            -alias androiddebugkey | tee signing-report.txt
+          grep "SHA1:" signing-report.txt | sed 's/^[[:space:]]*//' > signing-sha1.txt
+
       - name: Run unit tests
         run: gradle testDebugUnitTest
 
@@ -39,5 +66,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lakony-command-center-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            signing-sha1.txt
           if-no-files-found: error
