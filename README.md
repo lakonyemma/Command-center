@@ -2,36 +2,65 @@
 
 A custom Android command center built with Kotlin and Jetpack Compose.
 
-## Version 1
+## Current features
 
-- Blue personal dashboard
-- Developer mode
-- School mode
-- Money mode
-- Daily briefing mode
-- Quick AI action buttons
-- Smith command input
+- Lakony Blue interface
+- Home dashboard
+- Developer, School, Money, and Smith modes
+- Bottom navigation
+- Saved task list
+- Task categories
+- Complete and clear tasks
+- Saved display name
+- Offline Smith command engine
+- Quick command routing
+- `add task ...` Smith command
+- Simple money snapshot
+- Custom blue launcher icon
+- Unit tests for Smith commands
+- GitHub Actions Android build
+- Automatic debug APK artifact
 
-## Open in Android Studio
+## Smith commands
 
-1. Clone this repository.
-2. Open the project folder in Android Studio.
-3. Allow Gradle sync to finish.
-4. Use JDK 17.
+Try commands such as:
+
+- `Smith, dev mode`
+- `Smith, school mode`
+- `Smith, money mode`
+- `Smith, brief me`
+- `add task Finish database`
+- `settings`
+
+## Run in Android Studio
+
+1. Clone `https://github.com/lakonyemma/Command-center.git`.
+2. Open the repository folder in Android Studio.
+3. Use JDK 17.
+4. Allow Gradle sync to complete.
 5. Connect an Android phone with USB debugging enabled, or start an emulator.
 6. Press Run.
 
-## Package
+## Download APK from GitHub
 
-`com.lakony.commandcenter`
+1. Open the repository on GitHub.
+2. Open the Actions tab.
+3. Select the latest successful Android CI run.
+4. Under Artifacts, download `lakony-command-center-debug`.
+5. Extract the ZIP and install `app-debug.apk` on your Android phone.
 
-## Next planned features
+Android might ask you to allow installation from your browser or file manager for a debug APK.
 
-- Real screen navigation
-- Local task storage
-- GitHub project integration
-- Calendar and email briefing
-- AI backend connection
-- Notifications
-- Custom app icon and splash screen
-- Dark blue mode
+## Technical details
+
+- Package: `com.lakony.commandcenter`
+- Minimum Android: API 26
+- Target Android: API 35
+- Kotlin: 2.0.21
+- Android Gradle Plugin: 8.7.3
+- Gradle CI runtime: 8.9
+- Java: 17
+
+## Integration roadmap
+
+The app is structured for later authenticated integrations such as GitHub, calendar, email, and an online AI backend. API keys and account credentials should never be committed to this public repository.
