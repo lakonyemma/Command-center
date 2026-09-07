@@ -29,7 +29,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            LakonyTheme(style = ThemeController.style) {
+            LakonyTheme {
                 CommandCenterRoot()
             }
         }
