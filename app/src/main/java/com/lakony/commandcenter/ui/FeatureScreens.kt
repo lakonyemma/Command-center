@@ -45,7 +45,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -169,13 +168,13 @@ private fun HubScreen(title: String, subtitle: String, items: List<HubItem>) {
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     Box(
-                        Modifier.size(42.dp).background(MaterialTheme.colorScheme.secondary, CircleShape),
+                        Modifier.size(42.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(item.icon, contentDescription = null)
+                        Icon(item.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     }
                     Column(Modifier.weight(1f)) {
-                        Text(item.title, fontWeight = FontWeight.Black)
+                        Text(item.title, fontWeight = FontWeight.SemiBold)
                         Text(item.description, color = MutedText, fontSize = 12.sp)
                     }
                     AssistChip(onClick = {}, label = { Text(item.status, fontSize = 9.sp) })
@@ -194,7 +193,7 @@ private fun TradingToggle(title: String, subtitle: String, checked: Boolean, onC
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Black)
+                Text(title, fontWeight = FontWeight.SemiBold)
                 Text(subtitle, color = MutedText, fontSize = 12.sp)
             }
             Switch(checked = checked, onCheckedChange = onChange)
@@ -207,10 +206,10 @@ private fun ToolLine(icon: ImageVector, title: String, subtitle: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Icon(icon, contentDescription = null, tint = PrimaryBlue)
         Column {
-            Text(title, fontWeight = FontWeight.Bold)
+            Text(title, fontWeight = FontWeight.SemiBold)
             Text(subtitle, color = MutedText, fontSize = 11.sp)
         }
     }
     Spacer(Modifier.height(2.dp))
-    Divider(color = Color.Black.copy(alpha = 0.08f))
+    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
 }
