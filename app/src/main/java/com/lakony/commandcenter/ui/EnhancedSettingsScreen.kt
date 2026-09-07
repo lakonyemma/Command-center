@@ -1,7 +1,6 @@
 package com.lakony.commandcenter.ui
 
 import android.Manifest
-import android.app.AlarmManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -11,7 +10,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,7 +43,7 @@ fun EnhancedSettingsScreen(
     var saved by remember { mutableStateOf(false) }
     var profileImage by remember { mutableStateOf(profileStore.load()) }
     var notificationsEnabled by remember { mutableStateOf(settings.tasklyDueNotifications) }
-    var exactAlarmAllowed by remember { mutableStateOf(TaskNotificationScheduler.canScheduleExact(context)) }
+    val exactAlarmAllowed = TaskNotificationScheduler.canScheduleExact(context)
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null && profileStore.saveFrom(uri)) profileImage = profileStore.load()
@@ -50,7 +51,7 @@ fun EnhancedSettingsScreen(
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     Column(
-        Modifier.fillMaxSize().padding(16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Text("SETTINGS", style = MaterialTheme.typography.headlineMedium)
@@ -127,16 +128,17 @@ fun EnhancedSettingsScreen(
                             notificationsEnabled = enabled
                             settings.tasklyDueNotifications = enabled
                             if (!enabled) TaskNotificationScheduler.cancelAll(context)
-                            if (enabled && Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
                         },
                     )
                 }
                 if (!exactAlarmAllowed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     OutlinedButton(onClick = {
-                        val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
                             data = Uri.parse("package:${context.packageName}")
-                        }
-                        context.startActivity(intent)
+                        })
                     }) { Text("Allow exact due-time alarms") }
                     Text("Without this Android may deliver the reminder slightly late.", color = MutedText, fontSize = 11.sp)
                 } else {
