@@ -21,14 +21,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lakony.commandcenter.data.LocalStore
 import com.lakony.commandcenter.logic.SmithCommandEngine
-import com.lakony.commandcenter.model.AppTask
 import com.lakony.commandcenter.profile.ProfileImageStore
 import com.lakony.commandcenter.taskly.TasklyApi
 import com.lakony.commandcenter.taskly.TasklySessionStore
 import kotlinx.coroutines.launch
 
 private enum class AppDestination(val label: String) {
-    Home("Home"), Local("Local"), Taskly("Taskly"), Smith("Smith"), Money("Money"), Absa("Absa"), Settings("Settings")
+    Home("Home"), Taskly("Taskly"), Smith("Smith"), Money("Money"), Absa("Absa"), Settings("Settings")
 }
 
 @Composable
@@ -39,12 +38,6 @@ fun CommandCenterAppV2() {
     val tasklyApi = remember { TasklyApi(tasklyStore) }
     var destination by remember { mutableStateOf(AppDestination.Home) }
     var displayName by remember { mutableStateOf(localStore.loadName()) }
-    var tasks by remember { mutableStateOf(localStore.loadTasks()) }
-
-    fun saveTasks(updated: List<AppTask>) {
-        tasks = updated
-        localStore.saveTasks(updated)
-    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -54,7 +47,6 @@ fun CommandCenterAppV2() {
                 AppDestination.entries.forEach { item ->
                     val icon = when (item) {
                         AppDestination.Home -> Icons.Default.Home
-                        AppDestination.Local -> Icons.Default.TaskAlt
                         AppDestination.Taskly -> Icons.Default.CloudSync
                         AppDestination.Smith -> Icons.Default.SmartToy
                         AppDestination.Money -> Icons.Default.AccountBalanceWallet
@@ -75,21 +67,18 @@ fun CommandCenterAppV2() {
             when (destination) {
                 AppDestination.Home -> BauhausHome(
                     name = displayName,
-                    tasks = tasks,
                     tasklyConnected = tasklyStore.isSignedIn,
                     onTaskly = { destination = AppDestination.Taskly },
                     onMoney = { destination = AppDestination.Money },
                     onAbsa = { destination = AppDestination.Absa },
                     onSmith = { destination = AppDestination.Smith },
                 )
-                AppDestination.Local -> LocalTasksV2(tasks, ::saveTasks)
                 AppDestination.Taskly -> TasklyHubScreen(tasklyStore, tasklyApi)
-                AppDestination.Smith -> SmithV2(tasklyStore, tasklyApi, tasks, ::saveTasks) { target ->
+                AppDestination.Smith -> SmithV2(tasklyStore, tasklyApi) { target ->
                     destination = when (target.lowercase()) {
-                        "taskly" -> AppDestination.Taskly
+                        "taskly", "tasks" -> AppDestination.Taskly
                         "money" -> AppDestination.Money
                         "absa", "bank", "banking" -> AppDestination.Absa
-                        "tasks", "local" -> AppDestination.Local
                         "settings" -> AppDestination.Settings
                         else -> AppDestination.Home
                     }
@@ -102,7 +91,6 @@ fun CommandCenterAppV2() {
                         displayName = it
                         localStore.saveName(it)
                     },
-                    taskCount = tasks.size,
                     tasklyConnected = tasklyStore.isSignedIn,
                     tasklyUser = tasklyStore.userName,
                     onOpenTaskly = { destination = AppDestination.Taskly },
@@ -144,14 +132,12 @@ private fun SwissBauhausTopBar(name: String, section: String) {
 @Composable
 private fun BauhausHome(
     name: String,
-    tasks: List<AppTask>,
     tasklyConnected: Boolean,
     onTaskly: () -> Unit,
     onMoney: () -> Unit,
     onAbsa: () -> Unit,
     onSmith: () -> Unit,
 ) {
-    val open = tasks.count { !it.completed }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -159,10 +145,7 @@ private fun BauhausHome(
         Text("HELLO, ${name.uppercase()}", style = MaterialTheme.typography.headlineLarge)
         Text("Function first. Clear hierarchy. Strong geometry.", color = MutedText)
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MetricBlock("LOCAL OPEN", open.toString(), Modifier.weight(1f))
-            MetricBlock("TASKLY", if (tasklyConnected) "LIVE" else "OFF", Modifier.weight(1f))
-        }
+        MetricBlock("TASKLY", if (tasklyConnected) "LIVE" else "OFF", Modifier.fillMaxWidth())
 
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
             Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -192,7 +175,7 @@ private fun BauhausHome(
 
         Text("MODULES", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ModuleBlock("MONEY", "Local plans", Modifier.weight(1f), onMoney)
+            ModuleBlock("MONEY", "Plans", Modifier.weight(1f), onMoney)
             ModuleBlock("ABSA", "Banking", Modifier.weight(1f), onAbsa)
             ModuleBlock("SMITH", "Commands", Modifier.weight(1f), onSmith)
         }
@@ -221,44 +204,9 @@ private fun ModuleBlock(title: String, subtitle: String, modifier: Modifier, onC
 }
 
 @Composable
-private fun LocalTasksV2(tasks: List<AppTask>, save: (List<AppTask>) -> Unit) {
-    var title by remember { mutableStateOf("") }
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text("LOCAL TASKS", style = MaterialTheme.typography.headlineMedium)
-        OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Task") }, singleLine = true)
-        Button(
-            onClick = {
-                if (title.isNotBlank()) {
-                    save(tasks + AppTask(title = title.trim(), category = "General"))
-                    title = ""
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("ADD TASK") }
-        tasks.forEach { task ->
-            Card {
-                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(task.completed, { checked -> save(tasks.map { if (it.id == task.id) it.copy(completed = checked) else it }) })
-                    Column(Modifier.weight(1f)) {
-                        Text(task.title, fontWeight = FontWeight.Bold)
-                        Text(task.category, color = MutedText, fontSize = 11.sp)
-                    }
-                    TextButton(onClick = { save(tasks.filterNot { it.id == task.id }) }) { Text("REMOVE") }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun SmithV2(
     tasklyStore: TasklySessionStore,
     api: TasklyApi,
-    tasks: List<AppTask>,
-    save: (List<AppTask>) -> Unit,
     navigate: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -266,12 +214,33 @@ private fun SmithV2(
     var response by remember { mutableStateOf("Ready.") }
     var busy by remember { mutableStateOf(false) }
 
+    fun addToTaskly(title: String) {
+        val workspace = tasklyStore.selectedWorkspaceId
+        if (!tasklyStore.isSignedIn) {
+            response = "Connect Taskly first. Local tasks have been removed."
+            navigate("taskly")
+            return
+        }
+        if (workspace == null) {
+            response = "Select a Taskly workspace first."
+            navigate("taskly")
+            return
+        }
+        busy = true
+        scope.launch {
+            api.createTask(workspace, title)
+                .onSuccess { response = "Added to Taskly: ${it.title}" }
+                .onFailure { response = it.message ?: "Taskly could not add the task." }
+            busy = false
+        }
+    }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text("SMITH", style = MaterialTheme.typography.headlineMedium)
-        Text(if (tasklyStore.isSignedIn) "Taskly commands active." else "Offline commands active.", color = MutedText)
+        Text(if (tasklyStore.isSignedIn) "Taskly commands active." else "Connect Taskly to create and manage tasks.", color = MutedText)
         OutlinedTextField(command, { command = it }, Modifier.fillMaxWidth(), label = { Text("Command") }, minLines = 2)
         Button(
             enabled = !busy,
@@ -284,25 +253,12 @@ private fun SmithV2(
                     normalized == "open absa" || normalized == "show my bank" || normalized == "show my balance" -> navigate("absa")
                     normalized.startsWith("add task ") -> {
                         val newTitle = raw.substringAfter("add task ", "", ignoreCase = true).trim()
-                        val workspace = tasklyStore.selectedWorkspaceId
-                        if (newTitle.isBlank()) response = "Give the task a title."
-                        else if (tasklyStore.isSignedIn && workspace != null) {
-                            busy = true
-                            scope.launch {
-                                api.createTask(workspace, newTitle)
-                                    .onSuccess { response = "Added to Taskly: ${it.title}" }
-                                    .onFailure { response = it.message ?: "Taskly could not add the task." }
-                                busy = false
-                            }
-                        } else {
-                            save(tasks + AppTask(title = newTitle, category = "Smith"))
-                            response = "Saved locally."
-                        }
+                        if (newTitle.isBlank()) response = "Give the task a title." else addToTaskly(newTitle)
                     }
                     else -> {
                         val result = SmithCommandEngine.run(raw)
                         response = result.message
-                        result.taskToAdd?.let { save(tasks + AppTask(title = it, category = "Smith")) }
+                        result.taskToAdd?.let { addToTaskly(it) }
                         result.destination?.let(navigate)
                     }
                 }
