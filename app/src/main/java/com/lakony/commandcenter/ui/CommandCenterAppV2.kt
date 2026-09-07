@@ -28,7 +28,7 @@ import com.lakony.commandcenter.taskly.TasklySessionStore
 import kotlinx.coroutines.launch
 
 private enum class AppDestination(val label: String) {
-    Home("Home"), Local("Local"), Taskly("Taskly"), Smith("Smith"), Money("Money"), Settings("Settings")
+    Home("Home"), Local("Local"), Taskly("Taskly"), Smith("Smith"), Money("Money"), Absa("Absa"), Settings("Settings")
 }
 
 @Composable
@@ -58,6 +58,7 @@ fun CommandCenterAppV2() {
                         AppDestination.Taskly -> Icons.Default.CloudSync
                         AppDestination.Smith -> Icons.Default.SmartToy
                         AppDestination.Money -> Icons.Default.AccountBalanceWallet
+                        AppDestination.Absa -> Icons.Default.AccountBalance
                         AppDestination.Settings -> Icons.Default.Settings
                     }
                     NavigationBarItem(
@@ -78,6 +79,7 @@ fun CommandCenterAppV2() {
                     tasklyConnected = tasklyStore.isSignedIn,
                     onTaskly = { destination = AppDestination.Taskly },
                     onMoney = { destination = AppDestination.Money },
+                    onAbsa = { destination = AppDestination.Absa },
                     onSmith = { destination = AppDestination.Smith },
                 )
                 AppDestination.Local -> LocalTasksV2(tasks, ::saveTasks)
@@ -86,12 +88,14 @@ fun CommandCenterAppV2() {
                     destination = when (target.lowercase()) {
                         "taskly" -> AppDestination.Taskly
                         "money" -> AppDestination.Money
+                        "absa", "bank", "banking" -> AppDestination.Absa
                         "tasks", "local" -> AppDestination.Local
                         "settings" -> AppDestination.Settings
                         else -> AppDestination.Home
                     }
                 }
                 AppDestination.Money -> EnhancedMoneyScreen()
+                AppDestination.Absa -> AbsaSpaceScreen()
                 AppDestination.Settings -> EnhancedSettingsScreen(
                     displayName = displayName,
                     onSaveName = {
@@ -144,6 +148,7 @@ private fun BauhausHome(
     tasklyConnected: Boolean,
     onTaskly: () -> Unit,
     onMoney: () -> Unit,
+    onAbsa: () -> Unit,
     onSmith: () -> Unit,
 ) {
     val open = tasks.count { !it.completed }
@@ -172,9 +177,23 @@ private fun BauhausHome(
             }
         }
 
+        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE5EB))) {
+            Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(52.dp).background(Color(0xFFB0003A)))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("ABSA BANKING", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB0003A))
+                    Text("Finance space ready", style = MaterialTheme.typography.titleLarge)
+                    Text("Balance, transactions, budgets and planned expenses.", color = MutedText)
+                }
+                Button(onClick = onAbsa) { Text("OPEN") }
+            }
+        }
+
         Text("MODULES", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ModuleBlock("MONEY", "Balance + plans", Modifier.weight(1f), onMoney)
+            ModuleBlock("MONEY", "Local plans", Modifier.weight(1f), onMoney)
+            ModuleBlock("ABSA", "Banking", Modifier.weight(1f), onAbsa)
             ModuleBlock("SMITH", "Commands", Modifier.weight(1f), onSmith)
         }
     }
@@ -262,6 +281,7 @@ private fun SmithV2(
                 val normalized = raw.lowercase().removePrefix("smith,").trim()
                 when {
                     normalized == "show my tasks" || normalized == "sync tasks" -> navigate("taskly")
+                    normalized == "open absa" || normalized == "show my bank" || normalized == "show my balance" -> navigate("absa")
                     normalized.startsWith("add task ") -> {
                         val newTitle = raw.substringAfter("add task ", "", ignoreCase = true).trim()
                         val workspace = tasklyStore.selectedWorkspaceId
