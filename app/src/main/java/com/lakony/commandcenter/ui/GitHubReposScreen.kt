@@ -1,5 +1,6 @@
 package com.lakony.commandcenter.ui
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -58,6 +59,21 @@ fun GitHubReposScreen() {
         }
     }
 
+    fun openRepository(repo: GitHubRepository) {
+        if (repo.htmlUrl.isBlank()) return
+        val viewIntent = Intent(Intent.ACTION_VIEW, Uri.parse(repo.htmlUrl))
+        val chooser = Intent.createChooser(viewIntent, "Open GitHub repository").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            context.startActivity(chooser)
+        } catch (_: ActivityNotFoundException) {
+            status = "No app is available to open repository links."
+        } catch (error: Exception) {
+            status = error.message ?: "Could not open repository."
+        }
+    }
+
     LaunchedEffect(Unit) { refresh() }
 
     Column(
@@ -86,11 +102,7 @@ fun GitHubReposScreen() {
         if (repos.isNotEmpty()) {
             Text("REPOSITORIES", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue)
             repos.forEach { repo ->
-                Card(onClick = {
-                    if (repo.htmlUrl.isNotBlank()) {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(repo.htmlUrl)))
-                    }
-                }) {
+                Card(onClick = { openRepository(repo) }) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(repo.name, fontWeight = FontWeight.Bold)
                         if (repo.description.isNotBlank()) Text(repo.description, color = MutedText, fontSize = 12.sp)
