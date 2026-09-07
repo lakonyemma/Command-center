@@ -40,7 +40,7 @@ private enum class ControlModule(val label: String) {
     Menu("Control Center"),
     Calendar("Calendar"),
     Inbox("Gmail"),
-    Developer("Developer"),
+    Developer("GitHub"),
     Trading("Trading"),
     Devices("Devices"),
     Systems("Systems"),
@@ -73,7 +73,7 @@ fun ControlCenterScreen() {
                 when (module) {
                     ControlModule.Calendar -> CalendarHubScreen()
                     ControlModule.Inbox -> GmailInboxScreen()
-                    ControlModule.Developer -> DeveloperHubScreen()
+                    ControlModule.Developer -> GitHubReposScreen()
                     ControlModule.Trading -> TradingHubScreen()
                     ControlModule.Devices -> DevicesHubScreen()
                     ControlModule.Systems -> SystemsHubScreen()
@@ -95,10 +95,10 @@ private fun ControlMenu(open: (ControlModule) -> Unit) {
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             ControlTile(Icons.Default.CalendarMonth, "CALENDAR", "Schedule and reminders", Modifier.weight(1f)) { open(ControlModule.Calendar) }
-            ControlTile(Icons.Default.Email, "GMAIL", "Inbox and action items", Modifier.weight(1f)) { open(ControlModule.Inbox) }
+            ControlTile(Icons.Default.Email, "GMAIL", "Inbox and Google account", Modifier.weight(1f)) { open(ControlModule.Inbox) }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ControlTile(Icons.Default.Code, "DEVELOPER", "GitHub and deployments", Modifier.weight(1f)) { open(ControlModule.Developer) }
+            ControlTile(Icons.Default.Code, "GITHUB", "View lakonyemma repositories", Modifier.weight(1f)) { open(ControlModule.Developer) }
             ControlTile(Icons.Default.ShowChart, "TRADING", "MT5 tools and risk", Modifier.weight(1f)) { open(ControlModule.Trading) }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -119,7 +119,7 @@ private fun ControlTile(
     ElevatedCard(onClick = onClick, modifier = modifier) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(icon, contentDescription = null, tint = PrimaryBlue)
-            Text(title, fontWeight = FontWeight.Black)
+            Text(title, fontWeight = FontWeight.Bold)
             Text(subtitle, color = MutedText, style = MaterialTheme.typography.bodySmall)
         }
     }
