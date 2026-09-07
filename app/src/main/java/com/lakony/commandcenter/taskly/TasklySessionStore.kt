@@ -9,12 +9,14 @@ class TasklySessionStore(context: Context) {
         const val DEFAULT_BASE_URL = "https://taskly-api-wws3.onrender.com"
     }
 
-    private val masterKey = MasterKey.Builder(context)
+    val appContext: Context = context.applicationContext
+
+    private val masterKey = MasterKey.Builder(appContext)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
 
     private val prefs = EncryptedSharedPreferences.create(
-        context,
+        appContext,
         "taskly_secure_session",
         masterKey,
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
