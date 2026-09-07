@@ -1,6 +1,5 @@
 package com.lakony.commandcenter.ui
 
-import android.accounts.Account
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -36,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.lakony.commandcenter.gmail.GmailClient
 import com.lakony.commandcenter.gmail.GmailMessage
@@ -80,54 +80,60 @@ fun GmailInboxScreen() {
     val authorizationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult(),
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-            runCatching { client.getAuthorizationResultFromIntent(result.data!!) }
+        val data = result.data
+        if (data != null) {
+            runCatching { client.getAuthorizationResultFromIntent(data) }
                 .onSuccess { authorization ->
                     val token = authorization.accessToken
                     if (token.isNullOrBlank()) {
-                        status = "Google did not return an access token."
+                        status = "Google finished authorization but did not return an access token."
                         busy = false
                     } else {
                         loadInbox(token)
                     }
                 }
                 .onFailure { error ->
-                    status = error.message ?: "Google authorization failed."
+                    val detail = if (error is ApiException) {
+                        "Google authorization failed (code ${error.statusCode}). ${error.message.orEmpty()}".trim()
+                    } else {
+                        error.message ?: "Google authorization failed."
+                    }
+                    status = detail
                     busy = false
                 }
         } else {
-            status = "Google connection cancelled."
+            status = if (result.resultCode == Activity.RESULT_CANCELED) {
+                "Google closed the authorization screen without returning a result. Tap CONNECT GOOGLE ACCOUNT and choose $EXPECTED_GMAIL_ACCOUNT."
+            } else {
+                "Google authorization did not return a result (code ${result.resultCode})."
+            }
             busy = false
         }
     }
 
-    fun authorize(selectAccount: Boolean) {
+    fun authorize() {
         busy = true
-        status = if (selectAccount) "Choose your Google account..." else "Connecting $EXPECTED_GMAIL_ACCOUNT..."
+        status = "Choose $EXPECTED_GMAIL_ACCOUNT and approve Gmail read-only access..."
 
-        val builder = AuthorizationRequest.builder()
+        val request = AuthorizationRequest.builder()
             .setRequestedScopes(listOf(Scope(GMAIL_SCOPE)))
+            .setPrompt(AuthorizationRequest.Prompt.SELECT_ACCOUNT)
+            .build()
 
-        if (selectAccount) {
-            builder.setPrompt(AuthorizationRequest.Prompt.SELECT_ACCOUNT)
-        } else {
-            builder.setAccount(Account(EXPECTED_GMAIL_ACCOUNT, "com.google"))
-        }
-
-        client.authorize(builder.build())
+        client.authorize(request)
             .addOnSuccessListener { authorization ->
                 if (authorization.hasResolution()) {
                     val pendingIntent = authorization.pendingIntent
                     if (pendingIntent != null) {
                         authorizationLauncher.launch(IntentSenderRequest.Builder(pendingIntent.intentSender).build())
                     } else {
-                        status = "Google authorization is unavailable."
+                        status = "Google authorization is unavailable on this device."
                         busy = false
                     }
                 } else {
                     val token = authorization.accessToken
                     if (token.isNullOrBlank()) {
-                        status = "Google did not return an access token."
+                        status = "Google did not return an access token. Tap CONNECT GOOGLE ACCOUNT to try again."
                         busy = false
                     } else {
                         loadInbox(token)
@@ -135,11 +141,12 @@ fun GmailInboxScreen() {
                 }
             }
             .addOnFailureListener { error ->
-                status = if (selectAccount) {
-                    error.message ?: "Google authorization failed."
+                val detail = if (error is ApiException) {
+                    "Google authorization could not start (code ${error.statusCode}). ${error.message.orEmpty()}".trim()
                 } else {
-                    "Could not use $EXPECTED_GMAIL_ACCOUNT automatically. Tap CHOOSE ACCOUNT below."
+                    error.message ?: "Google authorization could not start."
                 }
+                status = detail
                 busy = false
             }
     }
@@ -161,11 +168,11 @@ fun GmailInboxScreen() {
                 Text("GOOGLE ACCOUNT", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue)
                 Text(if (connectedEmail.isBlank()) "Not connected" else connectedEmail, fontWeight = FontWeight.Bold)
                 Text(status, color = MutedText, fontSize = 12.sp)
-                Button(onClick = { authorize(false) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = { authorize() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     Text(if (connectedEmail.isBlank()) "CONNECT GOOGLE ACCOUNT" else "REFRESH GMAIL")
                 }
-                OutlinedButton(onClick = { authorize(true) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                    Text("CHOOSE ACCOUNT")
+                OutlinedButton(onClick = { authorize() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Text("CHOOSE GOOGLE ACCOUNT")
                 }
             }
         }
