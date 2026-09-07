@@ -4,7 +4,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -13,37 +13,36 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// Keep these legacy enum identifiers stable: ThemeController historically persisted AppThemeStyle.name.
-// All legacy values now resolve to the same Navy Blue design so existing installs migrate visually
-// without breaking stored preferences.
+// Keep these legacy enum identifiers stable because older installs persisted AppThemeStyle.name.
+// Every legacy value now resolves to the same Midnight Blue design system.
 enum class AppThemeStyle(val label: String) {
-    BAUHAUS_BLUE("Navy Blue"),
-    SWISS_RED("Navy Blue"),
-    GRAPHITE("Navy Blue"),
-    FOREST("Navy Blue"),
+    BAUHAUS_BLUE("Midnight Blue"),
+    SWISS_RED("Midnight Blue"),
+    GRAPHITE("Midnight Blue"),
+    FOREST("Midnight Blue"),
 }
 
-private val NavyBlue = lightColorScheme(
-    primary = Color(0xFF0B2A4A),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFD7E5F3),
-    onPrimaryContainer = Color(0xFF071E35),
-    secondary = Color(0xFF315F89),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFE1EBF5),
-    onSecondaryContainer = Color(0xFF183A59),
-    tertiary = Color(0xFF4D7397),
-    onTertiary = Color(0xFFFFFFFF),
-    background = Color(0xFFEAF0F6),
-    onBackground = Color(0xFF101B27),
-    surface = Color(0xFFF8FAFD),
-    onSurface = Color(0xFF101B27),
-    surfaceVariant = Color(0xFFDDE7F0),
-    onSurfaceVariant = Color(0xFF506273),
-    outline = Color(0xFFB6C7D7),
-    outlineVariant = Color(0xFFD2DEE8),
-    error = Color(0xFFB3261E),
-    onError = Color(0xFFFFFFFF),
+private val MidnightBlue = darkColorScheme(
+    primary = Color(0xFF78B7FF),
+    onPrimary = Color(0xFF06182A),
+    primaryContainer = Color(0xFF123A60),
+    onPrimaryContainer = Color(0xFFDCEEFF),
+    secondary = Color(0xFF9CBAD6),
+    onSecondary = Color(0xFF10283E),
+    secondaryContainer = Color(0xFF223B53),
+    onSecondaryContainer = Color(0xFFDCE8F4),
+    tertiary = Color(0xFF7FA8C8),
+    onTertiary = Color(0xFF0D263A),
+    background = Color(0xFF07111D),
+    onBackground = Color(0xFFEAF1F8),
+    surface = Color(0xFF0C1927),
+    onSurface = Color(0xFFEAF1F8),
+    surfaceVariant = Color(0xFF142638),
+    onSurfaceVariant = Color(0xFFB8C7D6),
+    outline = Color(0xFF35516B),
+    outlineVariant = Color(0xFF23384B),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
 )
 
 private val ProfessionalTypography = Typography(
@@ -65,7 +64,7 @@ private val ProfessionalShapes = Shapes(
 )
 
 val DeepBlue: Color
-    @Composable get() = MaterialTheme.colorScheme.primary
+    @Composable get() = MaterialTheme.colorScheme.background
 val PrimaryBlue: Color
     @Composable get() = MaterialTheme.colorScheme.primary
 val BrightBlue: Color
@@ -73,14 +72,14 @@ val BrightBlue: Color
 val SoftBlue: Color
     @Composable get() = MaterialTheme.colorScheme.primaryContainer
 val SurfaceBlue: Color
-    @Composable get() = MaterialTheme.colorScheme.background
+    @Composable get() = MaterialTheme.colorScheme.surface
 val MutedText: Color
     @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
 
 @Composable
 fun LakonyTheme(style: AppThemeStyle = AppThemeStyle.BAUHAUS_BLUE, content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = NavyBlue,
+        colorScheme = MidnightBlue,
         typography = ProfessionalTypography,
         shapes = ProfessionalShapes,
         content = content,
