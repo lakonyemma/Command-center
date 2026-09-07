@@ -9,7 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.lakony.commandcenter.notifications.TaskNotificationScheduler
-import com.lakony.commandcenter.ui.CommandCenterAppV2
+import com.lakony.commandcenter.ui.CommandCenterRoot
 import com.lakony.commandcenter.ui.LakonyTheme
 import com.lakony.commandcenter.ui.ThemeController
 
@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             LakonyTheme(style = ThemeController.style) {
-                CommandCenterAppV2()
+                CommandCenterRoot()
             }
         }
     }
