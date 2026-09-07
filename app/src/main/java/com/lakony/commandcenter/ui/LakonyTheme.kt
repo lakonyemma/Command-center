@@ -77,7 +77,7 @@ val MutedText: Color
     @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
 
 @Composable
-fun LakonyTheme(style: AppThemeStyle = AppThemeStyle.BAUHAUS_BLUE, content: @Composable () -> Unit) {
+fun LakonyTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = MidnightBlue,
         typography = ProfessionalTypography,

@@ -3,6 +3,7 @@ package com.lakony.commandcenter.github
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -33,7 +34,11 @@ object GitHubClient {
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
             val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (status !in 200..299) error("GitHub API error $status")
+            if (status !in 200..299) {
+                val apiMessage = runCatching { JSONObject(body).optString("message") }.getOrNull().orEmpty()
+                val detail = apiMessage.ifBlank { body.take(180).trim() }
+                error(if (detail.isBlank()) "GitHub API error $status" else "GitHub API error $status: $detail")
+            }
             val array = JSONArray(body)
             buildList {
                 for (index in 0 until array.length()) {

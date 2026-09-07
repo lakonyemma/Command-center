@@ -30,12 +30,13 @@ jobs:
           gradle-version: '8.9'
 
       - name: Restore stable debug signing key
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
           key: command-center-debug-keystore-v1
 
-      - name: Ensure stable debug signing key
+      - name: Ensure debug signing key
         shell: bash
         run: |
           mkdir -p "$HOME/.android"
