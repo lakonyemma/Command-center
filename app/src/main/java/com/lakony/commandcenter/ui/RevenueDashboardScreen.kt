@@ -45,11 +45,13 @@ import com.lakony.commandcenter.revenue.LeadStage
 import com.lakony.commandcenter.revenue.RevenueApiClient
 import com.lakony.commandcenter.revenue.RevenueAuthStore
 import com.lakony.commandcenter.revenue.RevenueCustomer
+import com.lakony.commandcenter.revenue.RevenueInsights
 import com.lakony.commandcenter.revenue.RevenueLead
 import com.lakony.commandcenter.revenue.RevenueStore
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 private const val REVENUE_GOOGLE_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 private const val REVENUE_ACCOUNT = "lakonyemmanuel92@gmail.com"
@@ -71,6 +73,7 @@ fun RevenueDashboardScreen() {
     var showLeadDialog by remember { mutableStateOf(false) }
     var showCustomerDialog by remember { mutableStateOf(false) }
     var paymentCustomer by remember { mutableStateOf<RevenueCustomer?>(null) }
+    var invoiceCustomer by remember { mutableStateOf<RevenueCustomer?>(null) }
 
     fun syncCloud() {
         if (token.isBlank()) return
@@ -264,6 +267,10 @@ fun RevenueDashboardScreen() {
             )
         }
 
+        item {
+            SectionCard("Smith priorities", RevenueInsights.recommendations(workspace))
+        }
+
         if (workspace.leads.isNotEmpty()) {
             item { Text("Leads", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
             items(workspace.leads.size) { index ->
@@ -282,7 +289,11 @@ fun RevenueDashboardScreen() {
             item { Text("Customers", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
             items(workspace.customers.size) { index ->
                 val customer = workspace.customers[index]
-                CustomerCard(customer) { paymentCustomer = customer }
+                CustomerCard(
+                    customer = customer,
+                    onRecordPayment = { paymentCustomer = customer },
+                    onCreateInvoice = { invoiceCustomer = customer },
+                )
             }
         }
 
@@ -296,19 +307,6 @@ fun RevenueDashboardScreen() {
                     },
                 )
             }
-        }
-
-        item {
-            SectionCard(
-                "Smith business commands",
-                listOf(
-                    "Show revenue status",
-                    "Find leads needing follow-up",
-                    "Show unpaid balances",
-                    "Rank customers by monthly value",
-                    "Prepare a sales follow-up plan",
-                ),
-            )
         }
     }
 
@@ -354,6 +352,22 @@ fun RevenueDashboardScreen() {
             },
         )
     }
+
+    invoiceCustomer?.let { customer ->
+        CreateInvoiceDialog(
+            customer = customer,
+            onDismiss = { invoiceCustomer = null },
+            onSave = { amount, dueDays ->
+                val dueAt = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(dueDays.toLong())
+                if (cloudConnected) {
+                    runCloudAction { RevenueApiClient.addInvoice(token, customer.id, amount, dueAt) }
+                } else {
+                    workspace = localStore.addInvoice(customer.id, amount, dueAt)
+                }
+                invoiceCustomer = null
+            },
+        )
+    }
 }
 
 @Composable
@@ -373,14 +387,21 @@ private fun LeadCard(lead: RevenueLead, onAdvance: () -> Unit) {
 }
 
 @Composable
-private fun CustomerCard(customer: RevenueCustomer, onRecordPayment: () -> Unit) {
+private fun CustomerCard(
+    customer: RevenueCustomer,
+    onRecordPayment: () -> Unit,
+    onCreateInvoice: () -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(customer.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             if (customer.company.isNotBlank()) Text(customer.company)
             Text("${customer.plan} · ${ugx(customer.monthlyValueUgx)}/month")
             Text(if (customer.subscriptionActive) "Subscription active" else "Subscription inactive")
-            Button(onClick = onRecordPayment) { Text("Record payment") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onRecordPayment, modifier = Modifier.weight(1f)) { Text("Payment") }
+                OutlinedButton(onClick = onCreateInvoice, modifier = Modifier.weight(1f)) { Text("Invoice") }
+            }
         }
     }
 }
@@ -446,6 +467,30 @@ private fun RecordPaymentDialog(customer: RevenueCustomer, onDismiss: () -> Unit
             }
         },
         confirmButton = { TextButton(enabled = (amount.toLongOrNull() ?: 0) > 0, onClick = { onSave(amount.toLongOrNull() ?: 0, reference) }) { Text("Record") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun CreateInvoiceDialog(customer: RevenueCustomer, onDismiss: () -> Unit, onSave: (Long, Int) -> Unit) {
+    var amount by remember { mutableStateOf(customer.monthlyValueUgx.toString()) }
+    var dueDays by remember { mutableStateOf("7") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Create invoice") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(customer.name)
+                OutlinedTextField(value = amount, onValueChange = { amount = it.filter(Char::isDigit) }, label = { Text("Amount UGX") })
+                OutlinedTextField(value = dueDays, onValueChange = { dueDays = it.filter(Char::isDigit) }, label = { Text("Due in days") })
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = (amount.toLongOrNull() ?: 0) > 0 && (dueDays.toIntOrNull() ?: 0) > 0,
+                onClick = { onSave(amount.toLongOrNull() ?: 0, dueDays.toIntOrNull() ?: 7) },
+            ) { Text("Create") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
