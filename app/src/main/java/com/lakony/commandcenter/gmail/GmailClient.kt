@@ -24,8 +24,11 @@ object GmailClient {
     private const val BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
 
     suspend fun loadInbox(accessToken: String): GmailInbox = withContext(Dispatchers.IO) {
+        require(accessToken.isNotBlank()) { "Google access token is missing." }
+
         val profile = getJson("$BASE/profile", accessToken)
         val email = profile.optString("emailAddress")
+        if (email.isBlank()) error("Gmail profile did not return an email address.")
 
         val list = getJson("$BASE/messages?labelIds=INBOX&maxResults=10", accessToken)
         val refs = list.optJSONArray("messages")
@@ -87,8 +90,20 @@ object GmailClient {
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
             val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (status !in 200..299) error("Gmail API error $status: $body")
-            JSONObject(body)
+            if (status !in 200..299) {
+                val detail = runCatching {
+                    JSONObject(body).optJSONObject("error")?.optString("message").orEmpty()
+                }.getOrDefault("")
+                val friendly = when (status) {
+                    401 -> "Google session expired. Reconnect Gmail."
+                    403 -> "Gmail access was denied. Confirm Gmail API access and the gmail.readonly permission."
+                    else -> detail.ifBlank { body.ifBlank { "No response body" } }
+                }
+                error("Gmail API error $status: $friendly")
+            }
+            if (body.isBlank()) error("Gmail API returned an empty response.")
+            runCatching { JSONObject(body) }
+                .getOrElse { error("Gmail API returned invalid JSON: ${it.message}") }
         } finally {
             connection.disconnect()
         }
