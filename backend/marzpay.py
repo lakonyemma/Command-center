@@ -51,8 +51,10 @@ def request_json(method: str, path: str, payload: dict[str, Any] | None = None) 
             message = parsed.get("message") or parsed.get("error") or detail
         except ValueError:
             message = detail or str(exc)
+        print(f"MARZPAY_HTTP_ERROR status={exc.code} message={message}", flush=True)
         raise MarzPayError(f"MarzPay API error {exc.code}: {message}") from exc
     except (URLError, TimeoutError, ValueError) as exc:
+        print(f"MARZPAY_TRANSPORT_ERROR type={type(exc).__name__} message={exc}", flush=True)
         raise MarzPayError(f"MarzPay API unavailable: {exc}") from exc
 
 
