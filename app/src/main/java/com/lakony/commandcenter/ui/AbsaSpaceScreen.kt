@@ -1,5 +1,8 @@
 package com.lakony.commandcenter.ui
 
+import android.content.Intent
+import android.nfc.NfcAdapter
+import android.provider.Settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -9,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,7 +55,7 @@ fun AbsaSpaceScreen(gateway: AbsaGateway = remember { MockAbsaGateway() }) {
         ) {
             Column {
                 Text("ABSA SPACE", style = MaterialTheme.typography.headlineMedium, color = AbsaSoft)
-                Text("Banking data inside your Command Center", color = MutedText)
+                Text("Banking data and your contactless card", color = MutedText)
             }
             Surface(color = AbsaTint, shape = RoundedCornerShape(999.dp)) {
                 Text(
@@ -63,6 +67,8 @@ fun AbsaSpaceScreen(gateway: AbsaGateway = remember { MockAbsaGateway() }) {
                 )
             }
         }
+
+        AbsaNfcCardPanel()
 
         when {
             loading -> LinearProgressIndicator(Modifier.fillMaxWidth(), color = AbsaRed)
@@ -77,6 +83,82 @@ fun AbsaSpaceScreen(gateway: AbsaGateway = remember { MockAbsaGateway() }) {
             }
             snapshot != null -> AbsaDashboard(snapshot!!, gateway.paymentInitiationEnabled, ::refresh)
         }
+    }
+}
+
+@Composable
+private fun AbsaNfcCardPanel() {
+    val context = LocalContext.current
+    val adapter = remember { NfcAdapter.getDefaultAdapter(context) }
+    val state by AbsaNfcCardReader.state.collectAsState()
+
+    Card(colors = CardDefaults.cardColors(containerColor = AbsaTint)) {
+        Column(
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("MY DEBIT CARD", color = AbsaSoft, fontWeight = FontWeight.Bold)
+                    Text("NFC contactless reader", color = MutedText, fontSize = 11.sp)
+                }
+                Surface(color = AbsaRedDark, shape = RoundedCornerShape(999.dp)) {
+                    Text("NFC", Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            when {
+                adapter == null -> {
+                    Text("This phone does not report NFC hardware.", fontWeight = FontWeight.SemiBold)
+                }
+                !adapter.isEnabled -> {
+                    Text("NFC is off. Turn it on, then return here.", fontWeight = FontWeight.SemiBold)
+                    Button(
+                        onClick = {
+                            runCatching { context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) }
+                                .onFailure { context.startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS)) }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AbsaRed),
+                    ) { Text("TURN ON NFC") }
+                }
+                else -> when (val current = state) {
+                    NfcCardState.Idle -> {
+                        Text("Hold your contactless Absa debit card against the NFC area on the back of your phone.")
+                        Text("The app reads permitted EMV identification data only. It does not request your PIN, CVV, or payment cryptograms.", color = MutedText, fontSize = 11.sp)
+                    }
+                    NfcCardState.Reading -> {
+                        LinearProgressIndicator(Modifier.fillMaxWidth(), color = AbsaRed)
+                        Text("Reading card. Keep it still against your phone.", fontWeight = FontWeight.SemiBold)
+                    }
+                    is NfcCardState.Error -> {
+                        Text(current.message, fontWeight = FontWeight.SemiBold)
+                        OutlinedButton(onClick = { AbsaNfcCardReader.reset() }) { Text("TRY AGAIN") }
+                    }
+                    is NfcCardState.Success -> {
+                        val card = current.card
+                        Text(card.paymentNetwork, color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text(card.applicationLabel, color = AbsaSoft)
+                        card.maskedPan?.let { CardDetail("CARD", it) }
+                        card.expiry?.let { CardDetail("EXPIRY", it) }
+                        CardDetail("APPLICATION ID", card.aid.chunked(4).joinToString(" "))
+                        CardDetail("LAST SCAN", card.scannedAt)
+                        OutlinedButton(onClick = { AbsaNfcCardReader.reset() }) { Text("SCAN AGAIN") }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CardDetail(label: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, color = MutedText, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        Text(value, fontWeight = FontWeight.SemiBold)
     }
 }
 
