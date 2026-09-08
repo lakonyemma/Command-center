@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.TrendingUp
@@ -20,7 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 
 private enum class RootDestination {
-    Dashboard, Revenue, Control
+    Dashboard, Smith, Revenue, Control
 }
 
 @Composable
@@ -34,7 +35,13 @@ fun CommandCenterRoot() {
                     selected = root == RootDestination.Dashboard,
                     onClick = { root = RootDestination.Dashboard },
                     icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard") },
-                    label = { Text("Dashboard") },
+                    label = { Text("Home") },
+                )
+                NavigationBarItem(
+                    selected = root == RootDestination.Smith,
+                    onClick = { root = RootDestination.Smith },
+                    icon = { Icon(Icons.Default.AutoAwesome, contentDescription = "Smith") },
+                    label = { Text("Smith") },
                 )
                 NavigationBarItem(
                     selected = root == RootDestination.Revenue,
@@ -54,6 +61,7 @@ fun CommandCenterRoot() {
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (root) {
                 RootDestination.Dashboard -> CommandCenterAppV2()
+                RootDestination.Smith -> SmithMissionControlScreen()
                 RootDestination.Revenue -> RevenueDashboardScreen()
                 RootDestination.Control -> ControlCenterScreen()
             }
