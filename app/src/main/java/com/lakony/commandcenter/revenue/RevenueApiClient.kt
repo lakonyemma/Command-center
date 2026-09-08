@@ -119,6 +119,17 @@ object RevenueApiClient {
         )
     }
 
+    suspend fun addInvoice(token: String, customerId: String, amountUgx: Long, dueAtEpochMs: Long) = withContext(Dispatchers.IO) {
+        requestObject(
+            "POST", "/v1/invoices", token,
+            JSONObject().apply {
+                put("customer_id", customerId)
+                put("amount_ugx", amountUgx)
+                put("due_at", Instant.ofEpochMilli(dueAtEpochMs).toString())
+            },
+        )
+    }
+
     private fun requestObject(method: String, path: String, token: String, body: JSONObject? = null): JSONObject {
         val text = request(method, path, token, body)
         return JSONObject(text)
