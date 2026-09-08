@@ -78,6 +78,10 @@ object RevenueApiClient {
         )
     }
 
+    suspend fun scanOpportunities(token: String): JSONObject = withContext(Dispatchers.IO) {
+        requestObject("POST", "/v1/opportunities/scan", token)
+    }
+
     suspend fun addLead(token: String, name: String, company: String, contact: String, monthlyValueUgx: Long) = withContext(Dispatchers.IO) {
         requestObject(
             "POST", "/v1/leads", token,
