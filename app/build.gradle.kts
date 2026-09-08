@@ -12,8 +12,10 @@ android {
         applicationId = "com.lakony.commandcenter"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+
+        val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+        versionCode = ciRunNumber ?: 2
+        versionName = if (ciRunNumber != null) "1.1.$ciRunNumber" else "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
