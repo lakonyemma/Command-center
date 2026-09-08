@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import BigInteger, Boolean, DateTime, String, create_engine, func, select
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, Text, create_engine, func, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./revenue_os.db")
@@ -68,9 +68,27 @@ class Invoice(Base):
     paid: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class Opportunity(Base):
+    __tablename__ = "smith_opportunities"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    source: Mapped[str] = mapped_column(String(120), default="")
+    source_url: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(String(300))
+    company: Mapped[str] = mapped_column(String(200), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_value_ugx: Mapped[int] = mapped_column(BigInteger, default=0)
+    proposal_draft: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(32), default="NEW")
+    approval_status: Mapped[str] = mapped_column(String(32), default="REVIEW_REQUIRED")
+    discovered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
 Base.metadata.create_all(engine)
 
-app = FastAPI(title="Taskly Revenue OS API", version="1.1.0")
+app = FastAPI(title="Taskly Revenue OS API", version="1.2.0")
 
 
 def google_email_for_token(token: str) -> str:
@@ -145,9 +163,13 @@ class InvoiceIn(BaseModel):
     due_at: datetime
 
 
+class OpportunityApprovalIn(BaseModel):
+    approval_status: str
+
+
 @app.get("/health")
 def health():
-    return {"ok": True, "service": "taskly-revenue-os", "version": "1.1.0"}
+    return {"ok": True, "service": "taskly-revenue-os", "version": "1.2.0"}
 
 
 @app.get("/v1/summary", dependencies=[Depends(require_api_key)])
@@ -295,3 +317,47 @@ def create_invoice(payload: InvoiceIn, db: Session = Depends(db_session)):
     db.add(row)
     db.commit()
     return {"id": row.id}
+
+
+@app.get("/v1/opportunities", dependencies=[Depends(require_api_key)])
+def list_opportunities(db: Session = Depends(db_session)):
+    rows = db.scalars(select(Opportunity).order_by(Opportunity.score.desc(), Opportunity.discovered_at.desc()).limit(200)).all()
+    return [
+        {
+            "id": row.id,
+            "source": row.source,
+            "sourceUrl": row.source_url,
+            "title": row.title,
+            "company": row.company,
+            "description": row.description,
+            "score": row.score,
+            "estimatedValueUgx": row.estimated_value_ugx,
+            "proposalDraft": row.proposal_draft,
+            "status": row.status,
+            "approvalStatus": row.approval_status,
+            "discoveredAt": row.discovered_at,
+            "lastSeenAt": row.last_seen_at,
+        }
+        for row in rows
+    ]
+
+
+@app.patch("/v1/opportunities/{opportunity_id}/approval", dependencies=[Depends(require_api_key)])
+def update_opportunity_approval(opportunity_id: str, payload: OpportunityApprovalIn, db: Session = Depends(db_session)):
+    allowed = {"REVIEW_REQUIRED", "APPROVED", "REJECTED"}
+    value = payload.approval_status.upper()
+    if value not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid approval status")
+    row = db.get(Opportunity, opportunity_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    row.approval_status = value
+    db.commit()
+    return {"ok": True, "approvalStatus": value}
+
+
+@app.post("/v1/opportunities/scan", dependencies=[Depends(require_api_key)])
+def scan_opportunities():
+    from backend.hunter import run_scan
+
+    return run_scan()
