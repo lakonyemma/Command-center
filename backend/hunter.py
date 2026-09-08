@@ -8,10 +8,10 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 
-from backend.main import Opportunity, SessionLocal
+from backend.main import Lead, Opportunity, SessionLocal
 from sqlalchemy import select
 
-USER_AGENT = "Lakony-Smith-Revenue-Hunter/1.0"
+USER_AGENT = "Lakony-Smith-Revenue-Hunter/1.1"
 DEFAULT_FEEDS = [
     ("We Work Remotely", "https://weworkremotely.com/categories/remote-programming-jobs.rss"),
     ("Remote OK", "https://remoteok.com/remote-jobs.rss"),
@@ -39,6 +39,8 @@ HIGH_VALUE = {
     "contract": 9,
     "freelance": 12,
     "consultant": 10,
+    "project": 8,
+    "part-time": 6,
 }
 
 NEGATIVE = {
@@ -49,9 +51,28 @@ NEGATIVE = {
     "principal": -5,
 }
 
+CLIENT_INTENT = (
+    "contract",
+    "freelance",
+    "consultant",
+    "consulting",
+    "project",
+    "part-time",
+    "temporary",
+    "short term",
+    "short-term",
+    "agency",
+)
+
 
 def fetch_text(url: str) -> str:
-    request = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/xml, text/xml, application/json"})
+    request = Request(
+        url,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": "application/rss+xml, application/xml, text/xml, application/json",
+        },
+    )
     with urlopen(request, timeout=20) as response:
         return response.read().decode("utf-8", errors="replace")
 
@@ -84,6 +105,12 @@ def estimate_value_ugx(opportunity_score: int) -> int:
     if opportunity_score >= 55:
         return 1_500_000
     return 750_000
+
+
+def is_client_candidate(title: str, description: str, opportunity_score: int) -> bool:
+    text = f"{title} {description}".lower()
+    explicit_client_intent = any(phrase in text for phrase in CLIENT_INTENT)
+    return opportunity_score >= 60 and (explicit_client_intent or opportunity_score >= 85)
 
 
 def proposal_for(title: str, company: str, description: str) -> str:
@@ -128,6 +155,7 @@ def parse_feed(source: str, url: str) -> list[dict]:
                 "description": description[:3000],
                 "score": opportunity_score,
                 "estimated_value_ugx": estimate_value_ugx(opportunity_score),
+                "client_candidate": is_client_candidate(title, description, opportunity_score),
             }
         )
     return rows
@@ -152,10 +180,12 @@ def run_scan() -> dict:
 
     added = 0
     updated = 0
+    leads_added = 0
     db = SessionLocal()
     try:
         for item in discovered:
             fingerprint = hashlib.sha256(item["source_url"].encode("utf-8")).hexdigest()[:32]
+            opportunity_id = f"opp-{fingerprint}"
             existing = db.scalar(select(Opportunity).where(Opportunity.fingerprint == fingerprint))
             if existing:
                 existing.title = item["title"]
@@ -165,25 +195,40 @@ def run_scan() -> dict:
                 existing.estimated_value_ugx = item["estimated_value_ugx"]
                 existing.last_seen_at = datetime.now(timezone.utc)
                 updated += 1
-                continue
-
-            db.add(
-                Opportunity(
-                    id=f"opp-{fingerprint}",
-                    fingerprint=fingerprint,
-                    source=item["source"],
-                    source_url=item["source_url"],
-                    title=item["title"],
-                    company=item["company"],
-                    description=item["description"],
-                    score=item["score"],
-                    estimated_value_ugx=item["estimated_value_ugx"],
-                    proposal_draft=proposal_for(item["title"], item["company"], item["description"]),
-                    status="NEW",
-                    approval_status="REVIEW_REQUIRED",
+            else:
+                db.add(
+                    Opportunity(
+                        id=opportunity_id,
+                        fingerprint=fingerprint,
+                        source=item["source"],
+                        source_url=item["source_url"],
+                        title=item["title"],
+                        company=item["company"],
+                        description=item["description"],
+                        score=item["score"],
+                        estimated_value_ugx=item["estimated_value_ugx"],
+                        proposal_draft=proposal_for(item["title"], item["company"], item["description"]),
+                        status="NEW",
+                        approval_status="REVIEW_REQUIRED",
+                    )
                 )
-            )
-            added += 1
+                added += 1
+
+            if item["client_candidate"]:
+                lead_id = f"smith-{fingerprint}"
+                if db.get(Lead, lead_id) is None:
+                    display_name = item["company"].strip() or item["title"]
+                    db.add(
+                        Lead(
+                            id=lead_id,
+                            name=display_name[:200],
+                            company=item["company"].strip()[:200],
+                            contact=item["source_url"][:200],
+                            stage="NEW",
+                            estimated_monthly_value_ugx=item["estimated_value_ugx"],
+                        )
+                    )
+                    leads_added += 1
         db.commit()
     finally:
         db.close()
@@ -192,6 +237,7 @@ def run_scan() -> dict:
         "scanned": len(discovered),
         "added": added,
         "updated": updated,
+        "leadsAdded": leads_added,
         "errors": errors,
         "sources": [name for name, _ in feeds],
     }
