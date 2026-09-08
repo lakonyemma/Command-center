@@ -6,7 +6,7 @@ from typing import Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request as FastAPIRequest
 from pydantic import BaseModel, Field
 from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, Text, create_engine, func, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
@@ -16,6 +16,7 @@ if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 API_KEY = os.getenv("REVENUE_API_KEY", "")
 EXPECTED_GOOGLE_ACCOUNT = os.getenv("REVENUE_GOOGLE_ACCOUNT", "lakonyemmanuel92@gmail.com").strip().lower()
+PUBLIC_BASE_URL = os.getenv("REVENUE_PUBLIC_BASE_URL", "https://revenue-os-api-04cu.onrender.com").rstrip("/")
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args=connect_args)
@@ -68,6 +69,21 @@ class Invoice(Base):
     paid: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class PaymentRequest(Base):
+    __tablename__ = "revenue_payment_requests"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    invoice_id: Mapped[str] = mapped_column(String(64), index=True)
+    customer_id: Mapped[str] = mapped_column(String(64), index=True)
+    provider: Mapped[str] = mapped_column(String(32), default="MARZPAY")
+    payment_link_uuid: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    payment_url: Mapped[str] = mapped_column(Text)
+    amount_ugx: Mapped[int] = mapped_column(BigInteger)
+    status: Mapped[str] = mapped_column(String(32), default="PENDING")
+    transaction_uuid: Mapped[str] = mapped_column(String(128), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
 class Opportunity(Base):
     __tablename__ = "smith_opportunities"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -88,7 +104,7 @@ class Opportunity(Base):
 
 Base.metadata.create_all(engine)
 
-app = FastAPI(title="Taskly Revenue OS API", version="1.2.0")
+app = FastAPI(title="Taskly Revenue OS API", version="1.3.0")
 
 
 def google_email_for_token(token: str) -> str:
@@ -169,7 +185,26 @@ class OpportunityApprovalIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "service": "taskly-revenue-os", "version": "1.2.0"}
+    from backend.marzpay import configured
+
+    return {
+        "ok": True,
+        "service": "taskly-revenue-os",
+        "version": "1.3.0",
+        "marzpayConfigured": configured(),
+    }
+
+
+@app.get("/health/marzpay")
+def marzpay_health():
+    from backend.marzpay import MarzPayError, account_check, configured
+
+    if not configured():
+        return {"configured": False, "reachable": False}
+    try:
+        return {"configured": True, "reachable": bool(account_check())}
+    except MarzPayError:
+        return {"configured": True, "reachable": False}
 
 
 @app.get("/v1/summary", dependencies=[Depends(require_api_key)])
@@ -317,6 +352,183 @@ def create_invoice(payload: InvoiceIn, db: Session = Depends(db_session)):
     db.add(row)
     db.commit()
     return {"id": row.id}
+
+
+@app.get("/v1/payment-requests", dependencies=[Depends(require_api_key)])
+def list_payment_requests(db: Session = Depends(db_session)):
+    rows = db.scalars(select(PaymentRequest).order_by(PaymentRequest.created_at.desc()).limit(200)).all()
+    return [
+        {
+            "id": row.id,
+            "invoiceId": row.invoice_id,
+            "customerId": row.customer_id,
+            "provider": row.provider,
+            "paymentUrl": row.payment_url,
+            "amountUgx": row.amount_ugx,
+            "status": row.status,
+            "transactionUuid": row.transaction_uuid,
+            "createdAt": row.created_at,
+            "updatedAt": row.updated_at,
+        }
+        for row in rows
+    ]
+
+
+@app.post("/v1/invoices/{invoice_id}/payment-link", dependencies=[Depends(require_api_key)])
+def create_invoice_payment_link(invoice_id: str, db: Session = Depends(db_session)):
+    from backend.marzpay import MarzPayError, configured, create_payment_link
+
+    invoice = db.get(Invoice, invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if invoice.paid:
+        raise HTTPException(status_code=409, detail="Invoice is already paid")
+    if not configured():
+        raise HTTPException(status_code=503, detail="MarzPay credentials are not configured")
+
+    existing = db.scalar(
+        select(PaymentRequest)
+        .where(PaymentRequest.invoice_id == invoice.id)
+        .where(PaymentRequest.status.in_(["PENDING", "CREATED"]))
+        .order_by(PaymentRequest.created_at.desc())
+    )
+    if existing:
+        return {
+            "id": existing.id,
+            "invoiceId": existing.invoice_id,
+            "paymentUrl": existing.payment_url,
+            "amountUgx": existing.amount_ugx,
+            "status": existing.status,
+        }
+
+    customer = db.get(Customer, invoice.customer_id)
+    customer_label = (customer.company or customer.name) if customer else "Client"
+    callback_url = f"{PUBLIC_BASE_URL}/webhooks/marzpay"
+    try:
+        data = create_payment_link(
+            title=f"Smith Revenue OS invoice - {customer_label}",
+            amount_ugx=invoice.amount_ugx,
+            description=f"Smith Revenue OS invoice {invoice.id}",
+            callback_url=callback_url,
+        )
+    except MarzPayError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    row = PaymentRequest(
+        id=str(uuid.uuid4()),
+        invoice_id=invoice.id,
+        customer_id=invoice.customer_id,
+        provider="MARZPAY",
+        payment_link_uuid=str(data["uuid"]),
+        payment_url=str(data["payment_url"]),
+        amount_ugx=invoice.amount_ugx,
+        status="PENDING",
+    )
+    db.add(row)
+    db.commit()
+    return {
+        "id": row.id,
+        "invoiceId": row.invoice_id,
+        "paymentUrl": row.payment_url,
+        "amountUgx": row.amount_ugx,
+        "status": row.status,
+    }
+
+
+@app.post("/webhooks/marzpay")
+async def marzpay_webhook(request: FastAPIRequest, db: Session = Depends(db_session)):
+    from backend.marzpay import MarzPayError, extract_transaction, find_payment_link_uuid, transaction_details
+
+    raw = await request.body()
+    try:
+        callback = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    callback_tx = extract_transaction(callback)
+    transaction_uuid = str(callback_tx.get("uuid") or "").strip()
+    if not transaction_uuid:
+        return {"ok": True, "ignored": "missing transaction uuid"}
+
+    # Do not trust an unsigned callback by itself. Re-fetch the transaction from
+    # MarzPay using the server-side API credentials and act only on verified data.
+    try:
+        verified = transaction_details(transaction_uuid)
+    except MarzPayError:
+        return {"ok": True, "ignored": "transaction could not be verified"}
+
+    verified_tx = extract_transaction(verified)
+    if str(verified_tx.get("uuid") or "") != transaction_uuid:
+        return {"ok": True, "ignored": "transaction verification mismatch"}
+
+    payment_link_uuid = find_payment_link_uuid(verified) or find_payment_link_uuid(callback)
+    payment_request = None
+    if payment_link_uuid:
+        payment_request = db.scalar(
+            select(PaymentRequest).where(PaymentRequest.payment_link_uuid == payment_link_uuid)
+        )
+
+    if payment_request is None:
+        description = str(verified_tx.get("description") or callback_tx.get("description") or "")
+        marker = "Smith Revenue OS invoice "
+        if marker in description:
+            invoice_id = description.split(marker, 1)[1].strip().split()[0]
+            payment_request = db.scalar(
+                select(PaymentRequest)
+                .where(PaymentRequest.invoice_id == invoice_id)
+                .order_by(PaymentRequest.created_at.desc())
+            )
+
+    if payment_request is None:
+        return {"ok": True, "ignored": "payment request not found"}
+
+    status = str(verified_tx.get("status") or "").lower()
+    amount = verified_tx.get("amount") or {}
+    raw_amount = amount.get("raw") if isinstance(amount, dict) else None
+    currency = str(amount.get("currency") or "") if isinstance(amount, dict) else ""
+
+    if status in {"failed", "cancelled", "canceled"}:
+        payment_request.status = status.upper()
+        payment_request.transaction_uuid = transaction_uuid
+        payment_request.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        return {"ok": True, "status": payment_request.status}
+
+    if status not in {"completed", "successful", "success"}:
+        return {"ok": True, "ignored": f"non-final status {status}"}
+
+    try:
+        verified_amount = int(float(raw_amount))
+    except (TypeError, ValueError):
+        return {"ok": True, "ignored": "invalid verified amount"}
+
+    if currency.upper() != "UGX" or verified_amount < payment_request.amount_ugx:
+        return {"ok": True, "ignored": "amount or currency mismatch"}
+
+    invoice = db.get(Invoice, payment_request.invoice_id)
+    if not invoice:
+        return {"ok": True, "ignored": "invoice not found"}
+
+    payment_id = f"marzpay-{transaction_uuid}"[:64]
+    existing_payment = db.get(Payment, payment_id)
+    if existing_payment is None:
+        db.add(
+            Payment(
+                id=payment_id,
+                customer_id=payment_request.customer_id,
+                amount_ugx=verified_amount,
+                status="PAID",
+                reference=f"MarzPay {transaction_uuid}"[:200],
+                paid_at=datetime.now(timezone.utc),
+            )
+        )
+
+    invoice.paid = True
+    payment_request.status = "PAID"
+    payment_request.transaction_uuid = transaction_uuid
+    payment_request.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"ok": True, "status": "PAID"}
 
 
 @app.get("/v1/opportunities", dependencies=[Depends(require_api_key)])
