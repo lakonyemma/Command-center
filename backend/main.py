@@ -1,7 +1,10 @@
+import json
 import os
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -12,6 +15,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./revenue_os.db")
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 API_KEY = os.getenv("REVENUE_API_KEY", "")
+EXPECTED_GOOGLE_ACCOUNT = os.getenv("REVENUE_GOOGLE_ACCOUNT", "lakonyemmanuel92@gmail.com").strip().lower()
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args=connect_args)
@@ -66,14 +70,39 @@ class Invoice(Base):
 
 Base.metadata.create_all(engine)
 
-app = FastAPI(title="Taskly Revenue OS API", version="1.0.0")
+app = FastAPI(title="Taskly Revenue OS API", version="1.1.0")
 
 
-def require_api_key(x_api_key: Optional[str] = Header(default=None)):
+def google_email_for_token(token: str) -> str:
+    request = Request(
+        "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+    )
+    try:
+        with urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            return str(payload.get("emailAddress", "")).strip().lower()
+    except (HTTPError, URLError, TimeoutError, ValueError):
+        return ""
+
+
+def require_api_key(
+    x_api_key: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    if API_KEY and x_api_key == API_KEY:
+        return
+
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+        email = google_email_for_token(token)
+        if email and email == EXPECTED_GOOGLE_ACCOUNT:
+            return
+        raise HTTPException(status_code=403, detail="Google account is not authorized for Revenue OS")
+
     if not API_KEY:
         raise HTTPException(status_code=503, detail="REVENUE_API_KEY is not configured")
-    if x_api_key != API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    raise HTTPException(status_code=401, detail="Revenue OS authorization required")
 
 
 def db_session():
@@ -118,7 +147,7 @@ class InvoiceIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "service": "taskly-revenue-os"}
+    return {"ok": True, "service": "taskly-revenue-os", "version": "1.1.0"}
 
 
 @app.get("/v1/summary", dependencies=[Depends(require_api_key)])
