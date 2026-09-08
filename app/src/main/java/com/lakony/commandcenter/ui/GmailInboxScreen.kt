@@ -1,6 +1,8 @@
 package com.lakony.commandcenter.ui
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -47,33 +50,53 @@ private const val EXPECTED_GMAIL_ACCOUNT = "lakonyemmanuel92@gmail.com"
 @Composable
 fun GmailInboxScreen() {
     val context = LocalContext.current
-    val activity = context as Activity
+    val activity = context.findGmailActivity()
+    if (activity == null) {
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
+            Text("GOOGLE / GMAIL", style = MaterialTheme.typography.headlineMedium)
+            Text("Google authorization is unavailable in this screen context.")
+        }
+        return
+    }
+
     val scope = rememberCoroutineScope()
     val client = remember { Identity.getAuthorizationClient(activity) }
     val messages = remember { mutableStateListOf<GmailMessage>() }
     var connectedEmail by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("Connect your Google account to load Gmail.") }
+    var status by remember { mutableStateOf("Restoring Gmail connection…") }
     var busy by remember { mutableStateOf(false) }
 
     val loadInbox: (String) -> Unit = { token ->
         busy = true
-        status = "Loading Gmail..."
+        status = "Loading Gmail…"
         scope.launch {
             runCatching { GmailClient.loadInbox(token) }
                 .onSuccess { inbox ->
+                    connectedEmail = inbox.email
+                    messages.clear()
                     if (!inbox.email.equals(EXPECTED_GMAIL_ACCOUNT, ignoreCase = true)) {
-                        connectedEmail = inbox.email
-                        messages.clear()
-                        status = "Wrong Google account. Use $EXPECTED_GMAIL_ACCOUNT."
+                        status = "Connected to ${inbox.email}. Choose $EXPECTED_GMAIL_ACCOUNT instead."
                     } else {
-                        connectedEmail = inbox.email
-                        messages.clear()
                         messages.addAll(inbox.messages)
-                        status = "Google account connected"
+                        status = "Gmail connected · ${inbox.messages.size} recent inbox messages loaded"
                     }
                 }
-                .onFailure { error -> status = error.message ?: "Gmail could not be loaded." }
+                .onFailure { error ->
+                    connectedEmail = ""
+                    status = error.message ?: "Gmail could not be loaded."
+                }
             busy = false
+        }
+    }
+
+    fun authError(error: Throwable): String {
+        if (error is ApiException && error.statusCode == 8) {
+            return "Google OAuth is not registered for this APK signing key (code 8). Install the latest signed build after the Android OAuth client is registered."
+        }
+        return if (error is ApiException) {
+            "Google authorization failed (code ${error.statusCode}). ${error.message.orEmpty()}".trim()
+        } else {
+            error.message ?: "Google authorization failed."
         }
     }
 
@@ -81,11 +104,14 @@ fun GmailInboxScreen() {
         ActivityResultContracts.StartIntentSenderForResult(),
     ) { result ->
         val data = result.data
-        if (data != null) {
+        if (data == null) {
+            status = "Google authorization was cancelled."
+            busy = false
+        } else {
             runCatching { client.getAuthorizationResultFromIntent(data) }
                 .onSuccess { authorization ->
-                    val token = authorization.accessToken
-                    if (token.isNullOrBlank()) {
+                    val token = authorization.accessToken.orEmpty()
+                    if (token.isBlank()) {
                         status = "Google finished authorization but did not return an access token."
                         busy = false
                     } else {
@@ -93,47 +119,43 @@ fun GmailInboxScreen() {
                     }
                 }
                 .onFailure { error ->
-                    val detail = if (error is ApiException) {
-                        "Google authorization failed (code ${error.statusCode}). ${error.message.orEmpty()}".trim()
-                    } else {
-                        error.message ?: "Google authorization failed."
-                    }
-                    status = detail
+                    status = authError(error)
                     busy = false
                 }
-        } else {
-            status = if (result.resultCode == Activity.RESULT_CANCELED) {
-                "Google closed the authorization screen without returning a result. Tap CONNECT GOOGLE ACCOUNT and choose $EXPECTED_GMAIL_ACCOUNT."
-            } else {
-                "Google authorization did not return a result (code ${result.resultCode})."
-            }
-            busy = false
         }
     }
 
-    fun authorize() {
+    fun authorize(interactive: Boolean) {
         busy = true
-        status = "Choose $EXPECTED_GMAIL_ACCOUNT and approve Gmail read-only access..."
+        status = if (interactive) {
+            "Choose $EXPECTED_GMAIL_ACCOUNT and approve Gmail read-only access…"
+        } else {
+            "Restoring Gmail authorization…"
+        }
 
-        val request = AuthorizationRequest.builder()
+        val builder = AuthorizationRequest.builder()
             .setRequestedScopes(listOf(Scope(GMAIL_SCOPE)))
-            .setPrompt(AuthorizationRequest.Prompt.SELECT_ACCOUNT)
-            .build()
+        if (interactive) builder.setPrompt(AuthorizationRequest.Prompt.SELECT_ACCOUNT)
 
-        client.authorize(request)
+        client.authorize(builder.build())
             .addOnSuccessListener { authorization ->
                 if (authorization.hasResolution()) {
+                    if (!interactive) {
+                        status = "Gmail permission is ready. Tap Connect Google Account once to approve access."
+                        busy = false
+                        return@addOnSuccessListener
+                    }
                     val pendingIntent = authorization.pendingIntent
-                    if (pendingIntent != null) {
-                        authorizationLauncher.launch(IntentSenderRequest.Builder(pendingIntent.intentSender).build())
-                    } else {
+                    if (pendingIntent == null) {
                         status = "Google authorization is unavailable on this device."
                         busy = false
+                    } else {
+                        authorizationLauncher.launch(IntentSenderRequest.Builder(pendingIntent.intentSender).build())
                     }
                 } else {
-                    val token = authorization.accessToken
-                    if (token.isNullOrBlank()) {
-                        status = "Google did not return an access token. Tap CONNECT GOOGLE ACCOUNT to try again."
+                    val token = authorization.accessToken.orEmpty()
+                    if (token.isBlank()) {
+                        status = "Google did not return an access token."
                         busy = false
                     } else {
                         loadInbox(token)
@@ -141,14 +163,14 @@ fun GmailInboxScreen() {
                 }
             }
             .addOnFailureListener { error ->
-                val detail = if (error is ApiException) {
-                    "Google authorization could not start (code ${error.statusCode}). ${error.message.orEmpty()}".trim()
-                } else {
-                    error.message ?: "Google authorization could not start."
-                }
-                status = detail
+                status = authError(error)
                 busy = false
             }
+    }
+
+    LaunchedEffect(Unit) {
+        // Re-acquire a fresh token silently when the user has already granted Gmail access.
+        authorize(interactive = false)
     }
 
     Column(
@@ -168,10 +190,10 @@ fun GmailInboxScreen() {
                 Text("GOOGLE ACCOUNT", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue)
                 Text(if (connectedEmail.isBlank()) "Not connected" else connectedEmail, fontWeight = FontWeight.Bold)
                 Text(status, color = MutedText, fontSize = 12.sp)
-                Button(onClick = { authorize() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = { authorize(interactive = true) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     Text(if (connectedEmail.isBlank()) "CONNECT GOOGLE ACCOUNT" else "REFRESH GMAIL")
                 }
-                OutlinedButton(onClick = { authorize() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { authorize(interactive = true) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     Text("CHOOSE GOOGLE ACCOUNT")
                 }
             }
@@ -191,4 +213,10 @@ fun GmailInboxScreen() {
             }
         }
     }
+}
+
+private tailrec fun Context.findGmailActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findGmailActivity()
+    else -> null
 }
