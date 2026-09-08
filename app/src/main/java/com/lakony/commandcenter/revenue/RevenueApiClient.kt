@@ -12,6 +12,10 @@ object RevenueApiClient {
     private const val BASE = "https://revenue-os-api-04cu.onrender.com"
 
     suspend fun loadWorkspace(token: String): RevenueWorkspace = withContext(Dispatchers.IO) {
+        // Smith scouts public opportunities before loading the sales pipeline.
+        // Scouting failure never blocks the normal Revenue OS sync.
+        runCatching { requestObject("POST", "/v1/opportunities/scan", token) }
+
         val summaryJson = requestObject("GET", "/v1/summary", token)
         val leadsJson = requestArray("GET", "/v1/leads", token)
         val customersJson = requestArray("GET", "/v1/customers", token)
