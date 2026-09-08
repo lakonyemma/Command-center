@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.lakony.commandcenter.notifications.TaskNotificationScheduler
 import com.lakony.commandcenter.smith.SmithDailyScheduler
+import com.lakony.commandcenter.smith.SmithOpportunityScheduler
 import com.lakony.commandcenter.ui.CommandCenterRoot
 import com.lakony.commandcenter.ui.LakonyTheme
 import com.lakony.commandcenter.ui.ThemeController
@@ -23,6 +24,7 @@ class MainActivity : ComponentActivity() {
         TaskNotificationScheduler.createChannel(this)
         TaskNotificationScheduler.rescheduleCached(this)
         SmithDailyScheduler.initialize(this)
+        SmithOpportunityScheduler.schedule(this)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
