@@ -1,6 +1,8 @@
 package com.lakony.commandcenter.ui
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.CloudDone
@@ -28,6 +31,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,7 +63,15 @@ private const val REVENUE_ACCOUNT = "lakonyemmanuel92@gmail.com"
 @Composable
 fun RevenueDashboardScreen() {
     val context = LocalContext.current
-    val activity = context as Activity
+    val activity = context.findActivity()
+    if (activity == null) {
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
+            Text("Revenue OS")
+            Text("Google authorization is unavailable in this screen context.")
+        }
+        return
+    }
+
     val localStore = remember { RevenueStore(context.applicationContext) }
     val authStore = remember { RevenueAuthStore(context.applicationContext) }
     val googleClient = remember { Identity.getAuthorizationClient(activity) }
@@ -67,7 +79,7 @@ fun RevenueDashboardScreen() {
 
     var workspace by remember { mutableStateOf(localStore.loadWorkspace()) }
     var token by remember { mutableStateOf(authStore.googleAccessToken()) }
-    var status by remember { mutableStateOf(if (token.isBlank()) "Cloud disconnected" else "Cloud token found") }
+    var status by remember { mutableStateOf("Restoring Revenue OS cloud connection…") }
     var busy by remember { mutableStateOf(false) }
     var cloudConnected by remember { mutableStateOf(false) }
     var showLeadDialog by remember { mutableStateOf(false) }
@@ -75,20 +87,38 @@ fun RevenueDashboardScreen() {
     var paymentCustomer by remember { mutableStateOf<RevenueCustomer?>(null) }
     var invoiceCustomer by remember { mutableStateOf<RevenueCustomer?>(null) }
 
-    fun syncCloud() {
-        if (token.isBlank()) return
+    fun googleError(error: Throwable): String {
+        if (error is ApiException && error.statusCode == 8) {
+            return "Google OAuth is not registered for this APK signing key (code 8). Reinstall the latest signed build after the Android OAuth client is registered."
+        }
+        return if (error is ApiException) {
+            "Google authorization failed (${error.statusCode}). ${error.message.orEmpty()}".trim()
+        } else {
+            error.message ?: "Google authorization failed"
+        }
+    }
+
+    fun syncWithToken(accessToken: String) {
+        if (accessToken.isBlank()) return
         busy = true
-        status = "Syncing Revenue OS..."
+        status = "Syncing Revenue OS cloud…"
         scope.launch {
-            runCatching { RevenueApiClient.loadWorkspace(token) }
+            runCatching { RevenueApiClient.loadWorkspace(accessToken) }
                 .onSuccess {
                     workspace = it
                     cloudConnected = true
-                    status = "Cloud connected · PostgreSQL"
+                    status = "Cloud connected · Revenue OS live"
                 }
                 .onFailure { error ->
                     cloudConnected = false
-                    status = error.message ?: "Revenue cloud sync failed"
+                    val detail = error.message.orEmpty()
+                    if (detail.contains("401") || detail.contains("403")) {
+                        authStore.clearGoogleAccessToken()
+                        token = ""
+                        status = "Google session expired or was rejected. Tap Connect Google to renew it."
+                    } else {
+                        status = error.message ?: "Revenue cloud sync failed"
+                    }
                 }
             busy = false
         }
@@ -98,92 +128,100 @@ fun RevenueDashboardScreen() {
         ActivityResultContracts.StartIntentSenderForResult(),
     ) { result ->
         val data = result.data
-        if (data != null) {
+        if (data == null) {
+            status = "Google authorization was cancelled."
+            busy = false
+        } else {
             runCatching { googleClient.getAuthorizationResultFromIntent(data) }
                 .onSuccess { authorization ->
                     val accessToken = authorization.accessToken.orEmpty()
                     if (accessToken.isBlank()) {
-                        status = "Google did not return an access token"
+                        status = "Google completed authorization but returned no access token."
                         busy = false
                     } else {
                         token = accessToken
                         authStore.saveGoogleAccessToken(accessToken)
-                        syncCloud()
+                        syncWithToken(accessToken)
                     }
                 }
                 .onFailure { error ->
-                    status = if (error is ApiException) {
-                        "Google authorization failed (${error.statusCode})"
-                    } else {
-                        error.message ?: "Google authorization failed"
-                    }
+                    status = googleError(error)
                     busy = false
                 }
-        } else {
-            status = "Google authorization was cancelled"
-            busy = false
         }
     }
 
-    fun authorizeGoogle() {
+    fun authorizeGoogle(interactive: Boolean) {
         busy = true
-        status = "Authorizing $REVENUE_ACCOUNT..."
-        val request = AuthorizationRequest.builder()
+        status = if (interactive) {
+            "Choose $REVENUE_ACCOUNT and approve Gmail read-only access…"
+        } else {
+            "Restoring Google authorization…"
+        }
+
+        val builder = AuthorizationRequest.builder()
             .setRequestedScopes(listOf(Scope(REVENUE_GOOGLE_SCOPE)))
-            .setPrompt(AuthorizationRequest.Prompt.SELECT_ACCOUNT)
-            .build()
-        googleClient.authorize(request)
+        if (interactive) builder.setPrompt(AuthorizationRequest.Prompt.SELECT_ACCOUNT)
+
+        googleClient.authorize(builder.build())
             .addOnSuccessListener { authorization ->
                 if (authorization.hasResolution()) {
-                    val pendingIntent = authorization.pendingIntent
-                    if (pendingIntent != null) {
-                        authorizationLauncher.launch(IntentSenderRequest.Builder(pendingIntent.intentSender).build())
-                    } else {
-                        status = "Google authorization is unavailable"
+                    if (!interactive) {
+                        status = "Google permission is ready. Tap Connect Google once to approve access."
                         busy = false
+                        return@addOnSuccessListener
+                    }
+                    val pendingIntent = authorization.pendingIntent
+                    if (pendingIntent == null) {
+                        status = "Google authorization is unavailable on this device."
+                        busy = false
+                    } else {
+                        authorizationLauncher.launch(IntentSenderRequest.Builder(pendingIntent.intentSender).build())
                     }
                 } else {
                     val accessToken = authorization.accessToken.orEmpty()
                     if (accessToken.isBlank()) {
-                        status = "Google did not return an access token"
+                        status = "Google did not return an access token."
                         busy = false
                     } else {
                         token = accessToken
                         authStore.saveGoogleAccessToken(accessToken)
-                        syncCloud()
+                        syncWithToken(accessToken)
                     }
                 }
             }
             .addOnFailureListener { error ->
-                status = if (error is ApiException) {
-                    "Google authorization failed (${error.statusCode})"
-                } else {
-                    error.message ?: "Google authorization failed"
-                }
+                status = googleError(error)
                 busy = false
             }
     }
 
     fun runCloudAction(action: suspend () -> Unit) {
-        if (token.isBlank()) {
-            authorizeGoogle()
+        if (token.isBlank() || !cloudConnected) {
+            status = "Connect Revenue OS cloud before making cloud changes."
             return
         }
         busy = true
         scope.launch {
-            runCatching { action() }
-                .onSuccess {
-                    runCatching { RevenueApiClient.loadWorkspace(token) }
-                        .onSuccess {
-                            workspace = it
-                            cloudConnected = true
-                            status = "Cloud connected · PostgreSQL"
-                        }
-                        .onFailure { status = it.message ?: "Cloud refresh failed" }
-                }
-                .onFailure { error -> status = error.message ?: "Revenue action failed" }
+            runCatching {
+                action()
+                RevenueApiClient.loadWorkspace(token)
+            }.onSuccess {
+                workspace = it
+                cloudConnected = true
+                status = "Cloud connected · Revenue OS live"
+            }.onFailure { error ->
+                cloudConnected = false
+                status = error.message ?: "Revenue cloud action failed"
+            }
             busy = false
         }
+    }
+
+    LaunchedEffect(Unit) {
+        // If Google access was already granted, AuthorizationClient returns a fresh token
+        // without opening a chooser. This avoids reusing an expired cached token.
+        authorizeGoogle(interactive = false)
     }
 
     val summary = workspace.summary
@@ -194,7 +232,7 @@ fun RevenueDashboardScreen() {
     ) {
         item {
             Text("Revenue OS", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Real business records. No demo revenue.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Live business records with Google-authenticated cloud sync.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         item {
@@ -205,13 +243,19 @@ fun RevenueDashboardScreen() {
                         Text(if (cloudConnected) "CLOUD LIVE" else "CLOUD CONNECTION", fontWeight = FontWeight.Bold)
                     }
                     Text(status, style = MaterialTheme.typography.bodySmall)
-                    if (token.isBlank()) {
-                        Button(onClick = { authorizeGoogle() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                            Text("Connect Google for Revenue OS")
-                        }
+                    if (!cloudConnected) {
+                        Button(
+                            onClick = { authorizeGoogle(interactive = true) },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Connect Google for Revenue OS") }
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { syncCloud() }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Sync") }
+                            Button(
+                                onClick = { authorizeGoogle(interactive = false) },
+                                enabled = !busy,
+                                modifier = Modifier.weight(1f),
+                            ) { Text("Refresh") }
                             OutlinedButton(
                                 onClick = {
                                     authStore.clearGoogleAccessToken()
@@ -267,14 +311,11 @@ fun RevenueDashboardScreen() {
             )
         }
 
-        item {
-            SectionCard("Smith priorities", RevenueInsights.recommendations(workspace))
-        }
+        item { SectionCard("Smith priorities", RevenueInsights.recommendations(workspace)) }
 
         if (workspace.leads.isNotEmpty()) {
             item { Text("Leads", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-            items(workspace.leads.size) { index ->
-                val lead = workspace.leads[index]
+            items(workspace.leads, key = { it.id }) { lead ->
                 LeadCard(lead) {
                     if (cloudConnected) {
                         runCloudAction { RevenueApiClient.updateLeadStage(token, lead.id, nextStage(lead.stage)) }
@@ -287,8 +328,7 @@ fun RevenueDashboardScreen() {
 
         if (workspace.customers.isNotEmpty()) {
             item { Text("Customers", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-            items(workspace.customers.size) { index ->
-                val customer = workspace.customers[index]
+            items(workspace.customers, key = { it.id }) { customer ->
                 CustomerCard(
                     customer = customer,
                     onRecordPayment = { paymentCustomer = customer },
@@ -314,11 +354,8 @@ fun RevenueDashboardScreen() {
         AddLeadDialog(
             onDismiss = { showLeadDialog = false },
             onSave = { name, company, contact, value ->
-                if (cloudConnected) {
-                    runCloudAction { RevenueApiClient.addLead(token, name, company, contact, value) }
-                } else {
-                    workspace = localStore.addLead(name, company, contact, value)
-                }
+                if (cloudConnected) runCloudAction { RevenueApiClient.addLead(token, name, company, contact, value) }
+                else workspace = localStore.addLead(name, company, contact, value)
                 showLeadDialog = false
             },
         )
@@ -328,11 +365,8 @@ fun RevenueDashboardScreen() {
         AddCustomerDialog(
             onDismiss = { showCustomerDialog = false },
             onSave = { name, company, contact, plan, value ->
-                if (cloudConnected) {
-                    runCloudAction { RevenueApiClient.addCustomer(token, name, company, contact, plan, value) }
-                } else {
-                    workspace = localStore.addCustomer(name, company, contact, plan, value)
-                }
+                if (cloudConnected) runCloudAction { RevenueApiClient.addCustomer(token, name, company, contact, plan, value) }
+                else workspace = localStore.addCustomer(name, company, contact, plan, value)
                 showCustomerDialog = false
             },
         )
@@ -343,11 +377,8 @@ fun RevenueDashboardScreen() {
             customer = customer,
             onDismiss = { paymentCustomer = null },
             onSave = { amount, reference ->
-                if (cloudConnected) {
-                    runCloudAction { RevenueApiClient.addPayment(token, customer.id, amount, reference) }
-                } else {
-                    workspace = localStore.addPayment(customer.id, amount, reference)
-                }
+                if (cloudConnected) runCloudAction { RevenueApiClient.addPayment(token, customer.id, amount, reference) }
+                else workspace = localStore.addPayment(customer.id, amount, reference)
                 paymentCustomer = null
             },
         )
@@ -359,11 +390,8 @@ fun RevenueDashboardScreen() {
             onDismiss = { invoiceCustomer = null },
             onSave = { amount, dueDays ->
                 val dueAt = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(dueDays.toLong())
-                if (cloudConnected) {
-                    runCloudAction { RevenueApiClient.addInvoice(token, customer.id, amount, dueAt) }
-                } else {
-                    workspace = localStore.addInvoice(customer.id, amount, dueAt)
-                }
+                if (cloudConnected) runCloudAction { RevenueApiClient.addInvoice(token, customer.id, amount, dueAt) }
+                else workspace = localStore.addInvoice(customer.id, amount, dueAt)
                 invoiceCustomer = null
             },
         )
@@ -387,11 +415,7 @@ private fun LeadCard(lead: RevenueLead, onAdvance: () -> Unit) {
 }
 
 @Composable
-private fun CustomerCard(
-    customer: RevenueCustomer,
-    onRecordPayment: () -> Unit,
-    onCreateInvoice: () -> Unit,
-) {
+private fun CustomerCard(customer: RevenueCustomer, onRecordPayment: () -> Unit, onCreateInvoice: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(customer.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -526,3 +550,9 @@ private fun nextStage(stage: LeadStage): LeadStage = when (stage) {
 }
 
 private fun ugx(value: Long): String = "UGX ${NumberFormat.getNumberInstance(Locale.US).format(value)}"
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
