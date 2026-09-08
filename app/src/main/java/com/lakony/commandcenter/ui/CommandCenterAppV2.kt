@@ -27,7 +27,7 @@ import java.util.Locale
 import kotlinx.coroutines.launch
 
 private enum class AppDestination(val label: String) {
-    Home("Home"), Taskly("Taskly"), Smith("Smith"), Money("Money"), Absa("Absa"), Settings("Settings")
+    Home("Home"), Taskly("Taskly"), Smith("Smith"), Revenue("Revenue"), Money("Money"), Absa("Absa"), Settings("Settings")
 }
 
 @Composable
@@ -49,6 +49,7 @@ fun CommandCenterAppV2() {
                         AppDestination.Home -> Icons.Default.Home
                         AppDestination.Taskly -> Icons.Default.CloudSync
                         AppDestination.Smith -> Icons.Default.SmartToy
+                        AppDestination.Revenue -> Icons.Default.Storefront
                         AppDestination.Money -> Icons.Default.AccountBalanceWallet
                         AppDestination.Absa -> Icons.Default.AccountBalance
                         AppDestination.Settings -> Icons.Default.Settings
@@ -57,7 +58,7 @@ fun CommandCenterAppV2() {
                         selected = destination == item,
                         onClick = { destination = item },
                         icon = { Icon(icon, contentDescription = item.label) },
-                        label = { Text(item.label, fontSize = 9.sp) },
+                        label = { Text(item.label, fontSize = 8.sp) },
                     )
                 }
             }
@@ -72,6 +73,7 @@ fun CommandCenterAppV2() {
                     onMoney = { destination = AppDestination.Money },
                     onAbsa = { destination = AppDestination.Absa },
                     onSmith = { destination = AppDestination.Smith },
+                    onRevenue = { destination = AppDestination.Revenue },
                 )
                 AppDestination.Taskly -> TasklyHubScreen(tasklyStore, tasklyApi)
                 AppDestination.Smith -> SmithV2(tasklyStore, tasklyApi) { target ->
@@ -79,10 +81,12 @@ fun CommandCenterAppV2() {
                         "taskly", "tasks" -> AppDestination.Taskly
                         "money" -> AppDestination.Money
                         "absa", "bank", "banking" -> AppDestination.Absa
+                        "revenue", "shopify", "creator", "creator studio", "tiktok", "youtube" -> AppDestination.Revenue
                         "settings" -> AppDestination.Settings
                         else -> AppDestination.Home
                     }
                 }
+                AppDestination.Revenue -> SmithRevenueScreen()
                 AppDestination.Money -> EnhancedMoneyScreen()
                 AppDestination.Absa -> AbsaSpaceScreen()
                 AppDestination.Settings -> EnhancedSettingsScreen(
@@ -158,6 +162,7 @@ private fun ProfessionalHome(
     onMoney: () -> Unit,
     onAbsa: () -> Unit,
     onSmith: () -> Unit,
+    onRevenue: () -> Unit,
 ) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -180,6 +185,13 @@ private fun ProfessionalHome(
             title = "Absa finance space",
             subtitle = "Balance, transactions, budgets and planned expenses.",
             onClick = onAbsa,
+        )
+
+        FeatureCard(
+            eyebrow = "SMITH REVENUE AGENT",
+            title = "Shopify + Creator Studio",
+            subtitle = "Product scouting, daily TikTok/YouTube campaigns and sales optimization.",
+            onClick = onRevenue,
         )
 
         Text("MODULES", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue)
@@ -305,6 +317,7 @@ private fun SmithV2(
                 when {
                     normalized == "show my tasks" || normalized == "sync tasks" -> navigate("taskly")
                     normalized == "open absa" || normalized == "show my bank" || normalized == "show my balance" -> navigate("absa")
+                    normalized == "open revenue" || normalized == "open shopify" || normalized == "open creator studio" -> navigate("revenue")
                     normalized.startsWith("add task ") -> {
                         val newTitle = raw.substringAfter("add task ", "", ignoreCase = true).trim()
                         if (newTitle.isBlank()) response = "Give the task a title." else addToTaskly(newTitle)
