@@ -18,6 +18,14 @@ object SmithCommandEngine {
                 if (title.isBlank()) SmithResult("Tell me the task name.")
                 else SmithResult("Task added: $title", destination = "Tasks", taskToAdd = title)
             }
+            "opportun" in normalized || "lead" in normalized || "proposal" in normalized || "sales" in normalized -> SmithResult(
+                "Opening Smith Mission Control. Review opportunities, approvals, proposals and follow-ups.",
+                destination = "Smith"
+            )
+            "revenue" in normalized || "mrr" in normalized || "customer" in normalized || "invoice" in normalized -> SmithResult(
+                "Opening Revenue OS for customers, payments, invoices and recurring revenue.",
+                destination = "Revenue"
+            )
             "dev" in normalized || "code" in normalized -> SmithResult(
                 "Developer mode ready. Open your projects, coding tasks, or debugging work.",
                 destination = "Home"
@@ -31,15 +39,15 @@ object SmithCommandEngine {
                 destination = "Money"
             )
             "brief" in normalized || "today" in normalized -> SmithResult(
-                "Daily briefing ready. Check your open tasks and current focus.",
-                destination = "Home"
+                "Smith Mission Control has today's priorities, opportunities and approvals.",
+                destination = "Smith"
             )
             "settings" in normalized || "profile" in normalized -> SmithResult(
                 "Opening your settings.",
                 destination = "Settings"
             )
             else -> SmithResult(
-                "I understood the command, but this offline version does not have a matching action yet. Try: dev mode, school mode, money mode, brief me, or add task followed by a task name."
+                "I understood the command, but this offline command does not have a matching action yet. Try: brief me, show opportunities, show revenue, dev mode, money mode, or add task followed by a task name."
             )
         }
     }
