@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -30,92 +31,158 @@ private enum class AppDestination(val label: String) {
     Home("Home"), Taskly("Taskly"), Smith("Smith"), Revenue("Revenue"), Money("Money"), Absa("Absa"), Settings("Settings")
 }
 
+private fun destinationIcon(item: AppDestination): ImageVector = when (item) {
+    AppDestination.Home -> Icons.Default.Home
+    AppDestination.Taskly -> Icons.Default.CloudSync
+    AppDestination.Smith -> Icons.Default.SmartToy
+    AppDestination.Revenue -> Icons.Default.Storefront
+    AppDestination.Money -> Icons.Default.AccountBalanceWallet
+    AppDestination.Absa -> Icons.Default.AccountBalance
+    AppDestination.Settings -> Icons.Default.Settings
+}
+
 @Composable
 fun CommandCenterAppV2() {
     val context = LocalContext.current
     val localStore = remember { LocalStore(context) }
     val tasklyStore = remember { TasklySessionStore(context) }
     val tasklyApi = remember { TasklyApi(tasklyStore) }
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val drawerScope = rememberCoroutineScope()
     var destination by remember { mutableStateOf(AppDestination.Home) }
     var displayName by remember { mutableStateOf(localStore.loadName()) }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = { ProfessionalTopBar(displayName, destination.label) },
-        bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                AppDestination.entries.forEach { item ->
-                    val icon = when (item) {
-                        AppDestination.Home -> Icons.Default.Home
-                        AppDestination.Taskly -> Icons.Default.CloudSync
-                        AppDestination.Smith -> Icons.Default.SmartToy
-                        AppDestination.Revenue -> Icons.Default.Storefront
-                        AppDestination.Money -> Icons.Default.AccountBalanceWallet
-                        AppDestination.Absa -> Icons.Default.AccountBalance
-                        AppDestination.Settings -> Icons.Default.Settings
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = MaterialTheme.colorScheme.surface,
+                drawerContentColor = MaterialTheme.colorScheme.onSurface,
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxHeight()
+                        .widthIn(min = 280.dp, max = 320.dp)
+                        .padding(vertical = 18.dp),
+                ) {
+                    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                        Text(
+                            "LAKONY",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            "COMMAND CENTER",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text("Navigation", color = MutedText, fontSize = 12.sp)
                     }
-                    NavigationBarItem(
-                        selected = destination == item,
-                        onClick = { destination = item },
-                        icon = { Icon(icon, contentDescription = item.label) },
-                        label = { Text(item.label, fontSize = 8.sp) },
+
+                    HorizontalDivider(Modifier.padding(vertical = 12.dp))
+
+                    AppDestination.entries.forEach { item ->
+                        NavigationDrawerItem(
+                            selected = destination == item,
+                            onClick = {
+                                destination = item
+                                drawerScope.launch { drawerState.close() }
+                            },
+                            icon = {
+                                Icon(
+                                    destinationIcon(item),
+                                    contentDescription = item.label,
+                                )
+                            },
+                            label = {
+                                Text(
+                                    item.label,
+                                    fontWeight = if (destination == item) FontWeight.SemiBold else FontWeight.Normal,
+                                )
+                            },
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                        )
+                    }
+
+                    Spacer(Modifier.weight(1f))
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                    Text(
+                        "Smith Revenue Agent • Taskly • Money",
+                        color = MutedText,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                     )
                 }
             }
         },
-    ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize()) {
-            when (destination) {
-                AppDestination.Home -> ProfessionalHome(
+    ) {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            topBar = {
+                ProfessionalTopBar(
                     name = displayName,
-                    tasklyConnected = tasklyStore.isSignedIn,
-                    onTaskly = { destination = AppDestination.Taskly },
-                    onMoney = { destination = AppDestination.Money },
-                    onAbsa = { destination = AppDestination.Absa },
-                    onSmith = { destination = AppDestination.Smith },
-                    onRevenue = { destination = AppDestination.Revenue },
+                    section = destination.label,
+                    onMenuClick = { drawerScope.launch { drawerState.open() } },
                 )
-                AppDestination.Taskly -> TasklyHubScreen(tasklyStore, tasklyApi)
-                AppDestination.Smith -> SmithV2(tasklyStore, tasklyApi) { target ->
-                    destination = when (target.lowercase(Locale.ROOT)) {
-                        "taskly", "tasks" -> AppDestination.Taskly
-                        "money" -> AppDestination.Money
-                        "absa", "bank", "banking" -> AppDestination.Absa
-                        "revenue", "shopify", "creator", "creator studio", "tiktok", "youtube" -> AppDestination.Revenue
-                        "settings" -> AppDestination.Settings
-                        else -> AppDestination.Home
+            },
+        ) { padding ->
+            Box(Modifier.padding(padding).fillMaxSize()) {
+                when (destination) {
+                    AppDestination.Home -> ProfessionalHome(
+                        name = displayName,
+                        tasklyConnected = tasklyStore.isSignedIn,
+                        onTaskly = { destination = AppDestination.Taskly },
+                        onMoney = { destination = AppDestination.Money },
+                        onAbsa = { destination = AppDestination.Absa },
+                        onSmith = { destination = AppDestination.Smith },
+                        onRevenue = { destination = AppDestination.Revenue },
+                    )
+                    AppDestination.Taskly -> TasklyHubScreen(tasklyStore, tasklyApi)
+                    AppDestination.Smith -> SmithV2(tasklyStore, tasklyApi) { target ->
+                        destination = when (target.lowercase(Locale.ROOT)) {
+                            "taskly", "tasks" -> AppDestination.Taskly
+                            "money" -> AppDestination.Money
+                            "absa", "bank", "banking" -> AppDestination.Absa
+                            "revenue", "shopify", "creator", "creator studio", "tiktok", "youtube" -> AppDestination.Revenue
+                            "settings" -> AppDestination.Settings
+                            else -> AppDestination.Home
+                        }
                     }
+                    AppDestination.Revenue -> SmithRevenueScreen()
+                    AppDestination.Money -> EnhancedMoneyScreen()
+                    AppDestination.Absa -> AbsaSpaceScreen()
+                    AppDestination.Settings -> EnhancedSettingsScreen(
+                        displayName = displayName,
+                        onSaveName = {
+                            displayName = it
+                            localStore.saveName(it)
+                        },
+                        tasklyConnected = tasklyStore.isSignedIn,
+                        tasklyUser = tasklyStore.userName,
+                        onOpenTaskly = { destination = AppDestination.Taskly },
+                    )
                 }
-                AppDestination.Revenue -> SmithRevenueScreen()
-                AppDestination.Money -> EnhancedMoneyScreen()
-                AppDestination.Absa -> AbsaSpaceScreen()
-                AppDestination.Settings -> EnhancedSettingsScreen(
-                    displayName = displayName,
-                    onSaveName = {
-                        displayName = it
-                        localStore.saveName(it)
-                    },
-                    tasklyConnected = tasklyStore.isSignedIn,
-                    tasklyUser = tasklyStore.userName,
-                    onOpenTaskly = { destination = AppDestination.Taskly },
-                )
             }
         }
     }
 }
 
 @Composable
-private fun ProfessionalTopBar(name: String, section: String) {
+private fun ProfessionalTopBar(name: String, section: String, onMenuClick: () -> Unit) {
     val context = LocalContext.current
     val profile = remember { ProfileImageStore(context) }
     val bitmap = remember(section, name) { profile.load() }
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp, shadowElevation = 1.dp) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                IconButton(onClick = onMenuClick) {
+                    Icon(Icons.Default.Menu, contentDescription = "Open navigation")
+                }
                 Box(
                     Modifier
                         .size(10.dp)
