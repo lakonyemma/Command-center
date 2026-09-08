@@ -9,6 +9,8 @@ from sqlalchemy import BigInteger, Boolean, DateTime, String, create_engine, fun
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./revenue_os.db")
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 API_KEY = os.getenv("REVENUE_API_KEY", "")
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
