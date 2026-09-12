@@ -11,26 +11,21 @@ class MockAbsaGateway : AbsaGateway {
     override suspend fun loadFinanceSnapshot(): Result<AbsaFinanceSnapshot> = Result.success(
         AbsaFinanceSnapshot(
             account = AbsaAccount(
-                accountId = "sandbox-account",
+                accountId = "demo-account",
                 accountName = "Absa Personal Account",
-                maskedAccountNumber = "**** **** 4821",
-                availableBalance = 2_400_000,
+                maskedAccountNumber = "**** **** 5157",
+                availableBalance = 9_324_667,
             ),
             transactions = listOf(
-                AbsaTransaction("tx-1", "Salary deposit", 1_800_000, "06 Sep 2026", SpendingCategory.Income),
-                AbsaTransaction("tx-2", "Shell Uganda", -120_000, "06 Sep 2026", SpendingCategory.Fuel),
-                AbsaTransaction("tx-3", "Glovo", -48_000, "05 Sep 2026", SpendingCategory.Food),
-                AbsaTransaction("tx-4", "UMEME", -95_000, "04 Sep 2026", SpendingCategory.Utilities),
+                AbsaTransaction("tx-flight-thu", "Flight ticket", -700_000, "10 Sep 2026", SpendingCategory.Transport),
+                AbsaTransaction("tx-flight-tue", "Flight ticket", -700_000, "08 Sep 2026", SpendingCategory.Transport),
             ),
             budgets = listOf(
                 SpendingBudget("budget-food", SpendingCategory.Food, 500_000),
                 SpendingBudget("budget-fuel", SpendingCategory.Fuel, 300_000),
                 SpendingBudget("budget-entertainment", SpendingCategory.Entertainment, 150_000),
             ),
-            plannedExpenses = listOf(
-                PlannedExpense("plan-rent", "Rent", 800_000, "01 Oct 2026", SpendingCategory.Other),
-                PlannedExpense("plan-internet", "Internet", 120_000, "10 Sep 2026", SpendingCategory.Utilities),
-            ),
+            plannedExpenses = emptyList(),
         )
     )
 }
