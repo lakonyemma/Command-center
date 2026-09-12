@@ -57,15 +57,6 @@ fun AbsaSpaceScreen(gateway: AbsaGateway = remember { MockAbsaGateway() }) {
                 Text("ABSA SPACE", style = MaterialTheme.typography.headlineMedium, color = AbsaSoft)
                 Text("Banking data and your contactless card", color = MutedText)
             }
-            Surface(color = AbsaTint, shape = RoundedCornerShape(999.dp)) {
-                Text(
-                    "SANDBOX",
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    color = AbsaSoft,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                )
-            }
         }
 
         AbsaNfcCardPanel()
@@ -112,9 +103,7 @@ private fun AbsaNfcCardPanel() {
             }
 
             when {
-                adapter == null -> {
-                    Text("This phone does not report NFC hardware.", fontWeight = FontWeight.SemiBold)
-                }
+                adapter == null -> Text("This phone does not report NFC hardware.", fontWeight = FontWeight.SemiBold)
                 !adapter.isEnabled -> {
                     Text("NFC is off. Turn it on, then return here.", fontWeight = FontWeight.SemiBold)
                     Button(
@@ -170,6 +159,7 @@ private fun AbsaDashboard(snapshot: AbsaFinanceSnapshot, paymentsEnabled: Boolea
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("AVAILABLE BALANCE", color = Color.White.copy(alpha = 0.78f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             Text(formatMoney(snapshot.account.availableBalance, currency), color = Color.White, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+            Text("Pending bank approval before funds become accessible", color = AbsaSoft, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             Text(snapshot.account.accountName, color = Color.White)
             Text(snapshot.account.maskedAccountNumber, color = Color.White.copy(alpha = 0.78f))
             OutlinedButton(onClick = refresh, colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) { Text("REFRESH") }
@@ -210,14 +200,18 @@ private fun AbsaDashboard(snapshot: AbsaFinanceSnapshot, paymentsEnabled: Boolea
     }
 
     Text("PLANNED EXPENSES", style = MaterialTheme.typography.labelLarge, color = AbsaSoft)
-    snapshot.plannedExpenses.forEach { expense ->
-        Card {
-            Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(Modifier.weight(1f)) {
-                    Text(expense.title, fontWeight = FontWeight.SemiBold)
-                    Text("Due ${expense.dueDate} • ${expense.category.label}", color = MutedText, fontSize = 11.sp)
+    if (snapshot.plannedExpenses.isEmpty()) {
+        Card { Text("No upcoming payments", Modifier.fillMaxWidth().padding(14.dp), color = MutedText) }
+    } else {
+        snapshot.plannedExpenses.forEach { expense ->
+            Card {
+                Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text(expense.title, fontWeight = FontWeight.SemiBold)
+                        Text("Due ${expense.dueDate} • ${expense.category.label}", color = MutedText, fontSize = 11.sp)
+                    }
+                    Text(formatMoney(expense.amount, currency), fontWeight = FontWeight.Bold)
                 }
-                Text(formatMoney(expense.amount, currency), fontWeight = FontWeight.Bold)
             }
         }
     }
