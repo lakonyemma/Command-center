@@ -21,38 +21,45 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        ThemeController.initialize(this)
-        TaskNotificationScheduler.createChannel(this)
-        TaskNotificationScheduler.rescheduleCached(this)
-        nfcAdapter = NfcAdapter.getDefaultAdapter(this)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
+        runCatching { ThemeController.initialize(this) }
 
         setContent {
             LakonyTheme {
                 CommandCenterRoot()
             }
         }
+
+        runCatching {
+            TaskNotificationScheduler.createChannel(this)
+            TaskNotificationScheduler.rescheduleCached(this)
+        }
+
+        nfcAdapter = runCatching { NfcAdapter.getDefaultAdapter(this) }.getOrNull()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            runCatching { notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) }
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        nfcAdapter?.enableReaderMode(
-            this,
-            { tag -> AbsaNfcCardReader.read(tag) },
-            NfcAdapter.FLAG_READER_NFC_A or
-                NfcAdapter.FLAG_READER_NFC_B or
-                NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,
-            null,
-        )
+        runCatching {
+            nfcAdapter?.enableReaderMode(
+                this,
+                { tag -> AbsaNfcCardReader.read(tag) },
+                NfcAdapter.FLAG_READER_NFC_A or
+                    NfcAdapter.FLAG_READER_NFC_B or
+                    NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,
+                null,
+            )
+        }
     }
 
     override fun onPause() {
-        nfcAdapter?.disableReaderMode(this)
+        runCatching { nfcAdapter?.disableReaderMode(this) }
         super.onPause()
     }
 }
